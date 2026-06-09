@@ -146,9 +146,10 @@ export default function NewCheckInPage() {
       return;
     }
 
-    await supabase.from('check_in_groups').insert(
-      selectedGroups.map((group_id) => ({ check_in_id: checkIn.id, group_id }))
-    );
+    await supabase.rpc('link_check_in_to_groups', {
+      p_check_in_id: checkIn.id,
+      p_group_ids: selectedGroups,
+    });
 
     // Fire-and-forget push notifications
     fetch('/api/notify', {
