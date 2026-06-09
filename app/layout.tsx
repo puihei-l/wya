@@ -3,7 +3,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'wya',
-  description: 'Where are you at?',
+  description: 'Where you at?',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,

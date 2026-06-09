@@ -34,7 +34,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-10">
           <h1 className="text-5xl font-black text-indigo-600 tracking-tight">wya</h1>
-          <p className="text-gray-400 mt-2 text-sm">where are you at?</p>
+          <p className="text-gray-400 mt-2 text-sm">where you at?</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-4">

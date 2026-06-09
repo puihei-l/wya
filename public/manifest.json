@@ -1,7 +1,7 @@
 {
   "name": "wya",
   "short_name": "wya",
-  "description": "Where are you at?",
+  "description": "Where you at?",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

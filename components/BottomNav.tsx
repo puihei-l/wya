@@ -28,7 +28,6 @@ export default function BottomNav() {
     { href: '/', icon: '🏠', label: 'Home' },
     { href: '/check-in/new', icon: '📍', label: 'Check in', primary: true },
     { href: '/groups', icon: '👥', label: 'Friends', badge: pendingCount },
-    { href: '/hangouts', icon: '📅', label: 'Plans' },
   ];
 
   return (

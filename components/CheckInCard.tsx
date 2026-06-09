@@ -34,6 +34,25 @@ function timeLeft(expires: string) {
   return `${Math.floor(mins / 60)}h ${mins % 60}m left`;
 }
 
+function timeUntil(startsAt: string) {
+  const mins = Math.floor((new Date(startsAt).getTime() - Date.now()) / 60000);
+  if (mins <= 0) return null;
+  if (mins < 60) return `in ${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  const rem = mins % 60;
+  return rem > 0 ? `in ${hrs}h ${rem}m` : `in ${hrs}h`;
+}
+
+function toDatetimeLocal(iso: string) {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function nowDatetimeLocal() {
+  return toDatetimeLocal(new Date().toISOString());
+}
+
 function Avatar({ name }: { name: string }) {
   const initials = name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
   return (
@@ -53,21 +72,26 @@ export default function CheckInCard({
   onUpdate?: () => void;
 }) {
   const isOwner = checkIn.user_id === currentUserId;
+  const isUpcoming = !!checkIn.starts_at && new Date(checkIn.starts_at) > new Date();
+
   const [isEditing, setIsEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [floor, setFloor] = useState(checkIn.floor ?? '');
   const [vibe, setVibe] = useState<Vibe>(checkIn.vibe);
   const [isOpen, setIsOpen] = useState(checkIn.is_open);
   const [note, setNote] = useState(checkIn.note ?? '');
+  const [startsAt, setStartsAt] = useState(checkIn.starts_at ? toDatetimeLocal(checkIn.starts_at) : '');
   const [durationMs, setDurationMs] = useState(2 * 60 * 60 * 1000);
   const [saving, setSaving] = useState(false);
 
   const vibeInfo = VIBE[checkIn.vibe] ?? VIBE.chilling;
   const left = timeLeft(checkIn.expires_at);
+  const until = checkIn.starts_at ? timeUntil(checkIn.starts_at) : null;
 
   async function handleSave() {
     const supabase = createClient();
     setSaving(true);
+    const startMs = startsAt ? new Date(startsAt).getTime() : Date.now();
     await supabase
       .from('check_ins')
       .update({
@@ -75,7 +99,8 @@ export default function CheckInCard({
         vibe,
         is_open: isOpen,
         note: note.trim() || null,
-        expires_at: new Date(Date.now() + durationMs).toISOString(),
+        starts_at: startsAt ? new Date(startsAt).toISOString() : null,
+        expires_at: new Date(startMs + durationMs).toISOString(),
       })
       .eq('id', checkIn.id);
     setSaving(false);
@@ -98,28 +123,38 @@ export default function CheckInCard({
     onUpdate?.();
   }
 
+  const editingStartsAtIsFuture = startsAt && new Date(startsAt) > new Date();
+
   const cardBody = (
     <div className="flex gap-3">
       <Avatar name={checkIn.profiles.display_name} />
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline justify-between gap-2">
           <span className="font-semibold text-gray-900 truncate">{checkIn.profiles.display_name}</span>
-          <span className="text-xs text-gray-400 flex-shrink-0">{timeAgo(checkIn.created_at)}</span>
+          <span className="text-xs text-gray-400 flex-shrink-0">
+            {isUpcoming && until ? until : timeAgo(checkIn.created_at)}
+          </span>
         </div>
         <p className="text-sm text-gray-600 truncate mt-0.5">
           {checkIn.buildings.name}
           {checkIn.floor && <span className="text-gray-400"> · Floor {checkIn.floor}</span>}
         </p>
         <div className="flex flex-wrap items-center gap-2 mt-2">
-          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${vibeInfo.bg} ${vibeInfo.text}`}>
-            {vibeInfo.emoji} {vibeInfo.label}
-          </span>
-          {checkIn.is_open && (
+          {isUpcoming ? (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-600">
+              📅 Heading there {until}
+            </span>
+          ) : (
+            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${vibeInfo.bg} ${vibeInfo.text}`}>
+              {vibeInfo.emoji} {vibeInfo.label}
+            </span>
+          )}
+          {checkIn.is_open && !isUpcoming && (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-600">
               ✌️ Open to join
             </span>
           )}
-          {left && <span className="text-xs text-gray-400 ml-auto">{left}</span>}
+          {left && !isUpcoming && <span className="text-xs text-gray-400 ml-auto">{left}</span>}
         </div>
         {checkIn.note && (
           <p className="text-sm text-gray-500 mt-2 italic">&ldquo;{checkIn.note}&rdquo;</p>
@@ -211,7 +246,29 @@ export default function CheckInCard({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-500 mb-1">Time from now</label>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">
+              Start time <span className="font-normal text-gray-400">(leave blank for now)</span>
+            </label>
+            <div className="flex gap-2 items-center">
+              <input
+                type="datetime-local"
+                value={startsAt}
+                min={nowDatetimeLocal()}
+                onChange={(e) => setStartsAt(e.target.value)}
+                className="flex-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              />
+              {startsAt && (
+                <button type="button" onClick={() => setStartsAt('')} className="text-xs text-gray-400 px-1">
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">
+              Time from {editingStartsAtIsFuture ? 'start time' : 'now'}
+            </label>
             <div className="grid grid-cols-4 gap-1.5">
               {DURATIONS.map((d) => (
                 <button
@@ -236,12 +293,14 @@ export default function CheckInCard({
             >
               {saving ? 'Saving…' : 'Save'}
             </button>
-            <button
-              onClick={handleEnd}
-              className="px-4 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-sm font-semibold"
-            >
-              End now
-            </button>
+            {!isUpcoming && (
+              <button
+                onClick={handleEnd}
+                className="px-4 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-sm font-semibold"
+              >
+                End now
+              </button>
+            )}
           </div>
 
           {!confirmDelete ? (

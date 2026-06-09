@@ -3,27 +3,28 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import CheckInCard from '@/components/CheckInCard';
-import EventCard from '@/components/EventCard';
 import PushSetup from '@/components/PushSetup';
-import type { CheckIn, Hangout } from '@/lib/types';
-
-type FeedItem =
-  | { type: 'check_in'; data: CheckIn; sortKey: string }
-  | { type: 'event'; data: Hangout; sortKey: string };
+import type { CheckIn } from '@/lib/types';
 
 export default function HomePage() {
-  const [feed, setFeed] = useState<FeedItem[]>([]);
+  const [feed, setFeed] = useState<CheckIn[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState('');
   const fetchAllRef = useRef<() => void>(() => {});
 
-  const buildFeed = useCallback((checkIns: CheckIn[], hangouts: Hangout[]) => {
-    const items: FeedItem[] = [
-      ...checkIns.map((c) => ({ type: 'check_in' as const, data: c, sortKey: c.created_at })),
-      ...hangouts.map((h) => ({ type: 'event' as const, data: h, sortKey: h.planned_at })),
-    ];
-    items.sort((a, b) => new Date(b.sortKey).getTime() - new Date(a.sortKey).getTime());
-    setFeed(items);
+  const buildFeed = useCallback((checkIns: CheckIn[]) => {
+    const now = new Date();
+    const active = checkIns.filter(
+      (c) => !c.starts_at || new Date(c.starts_at) <= now
+    );
+    const upcoming = checkIns.filter(
+      (c) => c.starts_at && new Date(c.starts_at) > now
+    );
+
+    active.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    upcoming.sort((a, b) => new Date(a.starts_at!).getTime() - new Date(b.starts_at!).getTime());
+
+    setFeed([...active, ...upcoming]);
     setLoading(false);
   }, []);
 
@@ -33,33 +34,16 @@ export default function HomePage() {
     async function fetchAll() {
       const now = new Date().toISOString();
 
-      const [{ data: checkIns }, { data: hangouts }] = await Promise.all([
-        supabase
-          .from('check_ins')
-          .select(
-            `id, user_id, floor, vibe, is_open, note, expires_at, created_at,
-             profiles:user_id (id, username, display_name, avatar_url),
-             buildings:building_id (id, name, address)`
-          )
-          .gt('expires_at', now)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('hangouts')
-          .select(
-            `id, title, planned_at, ends_at, note, creator_id,
-             profiles:creator_id (id, username, display_name, avatar_url),
-             buildings:building_id (id, name, address),
-             hangout_participants (user_id, status)`
-          )
-          .lte('planned_at', now)
-          .gte('ends_at', now)
-          .order('planned_at', { ascending: false }),
-      ]);
+      const { data: checkIns } = await supabase
+        .from('check_ins')
+        .select(
+          `id, user_id, floor, vibe, is_open, note, starts_at, expires_at, created_at,
+           profiles:user_id (id, username, display_name, avatar_url),
+           buildings:building_id (id, name, address)`
+        )
+        .gt('expires_at', now);
 
-      buildFeed(
-        (checkIns as unknown as CheckIn[]) ?? [],
-        (hangouts as unknown as Hangout[]) ?? []
-      );
+      buildFeed((checkIns as unknown as CheckIn[]) ?? []);
     }
 
     async function init() {
@@ -73,7 +57,6 @@ export default function HomePage() {
       supabase
         .channel('feed')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'check_ins' }, fetchAll)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'hangout_participants' }, fetchAll)
         .subscribe();
 
       supabase
@@ -92,8 +75,9 @@ export default function HomePage() {
     return () => { supabase.removeAllChannels(); };
   }, [buildFeed]);
 
-  const checkInCount = feed.filter((f) => f.type === 'check_in').length;
-  const eventCount = feed.filter((f) => f.type === 'event').length;
+  const now = new Date();
+  const activeCount = feed.filter((c) => !c.starts_at || new Date(c.starts_at) <= now).length;
+  const upcomingCount = feed.filter((c) => c.starts_at && new Date(c.starts_at) > now).length;
 
   return (
     <div className="max-w-lg mx-auto px-4 pt-6">
@@ -103,8 +87,8 @@ export default function HomePage() {
         <h1 className="text-2xl font-black text-gray-900 tracking-tight">wya</h1>
         {!loading && (
           <span className="text-sm text-gray-400">
-            {checkInCount} {checkInCount === 1 ? 'person' : 'people'} out
-            {eventCount > 0 && ` · ${eventCount} happening now`}
+            {activeCount} {activeCount === 1 ? 'person' : 'people'} out
+            {upcomingCount > 0 && ` · ${upcomingCount} heading out soon`}
           </span>
         )}
       </div>
@@ -121,23 +105,14 @@ export default function HomePage() {
         </div>
       ) : (
         <div className="space-y-3 pb-6">
-          {feed.map((item) =>
-            item.type === 'check_in' ? (
-              <CheckInCard
-                key={item.data.id}
-                checkIn={item.data}
-                currentUserId={currentUserId}
-                onUpdate={() => fetchAllRef.current()}
-              />
-            ) : (
-              <EventCard
-                key={item.data.id}
-                hangout={item.data}
-                currentUserId={currentUserId}
-                onUpdate={() => fetchAllRef.current()}
-              />
-            )
-          )}
+          {feed.map((checkIn) => (
+            <CheckInCard
+              key={checkIn.id}
+              checkIn={checkIn}
+              currentUserId={currentUserId}
+              onUpdate={() => fetchAllRef.current()}
+            />
+          ))}
         </div>
       )}
     </div>

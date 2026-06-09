@@ -45,6 +45,7 @@ export default function SignupPage() {
       email: form.email,
       password: form.password,
       options: {
+        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin}/`,
         data: {
           username,
           display_name: form.displayName.trim(),
@@ -66,7 +67,7 @@ export default function SignupPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-10">
           <h1 className="text-5xl font-black text-indigo-600 tracking-tight">wya</h1>
-          <p className="text-gray-400 mt-2 text-sm">where are you at?</p>
+          <p className="text-gray-400 mt-2 text-sm">where you at?</p>
         </div>
 
         <form onSubmit={handleSignup} className="space-y-4">

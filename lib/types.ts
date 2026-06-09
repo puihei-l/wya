@@ -21,6 +21,7 @@ export interface CheckIn {
   vibe: Vibe;
   is_open: boolean;
   note: string | null;
+  starts_at: string | null;
   expires_at: string;
   created_at: string;
   profiles: Profile;

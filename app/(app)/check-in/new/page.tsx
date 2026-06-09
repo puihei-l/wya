@@ -13,6 +13,11 @@ const VIBES: { value: Vibe; emoji: string; label: string }[] = [
   { value: 'gaming', emoji: '🎮', label: 'Gaming' },
 ];
 
+function toDatetimeLocal(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export default function NewCheckInPage() {
   const router = useRouter();
   const supabase = createClient();
@@ -26,6 +31,7 @@ export default function NewCheckInPage() {
   const [vibe, setVibe] = useState<Vibe | ''>('');
   const [isOpen, setIsOpen] = useState(true);
   const [note, setNote] = useState('');
+  const [startsAt, setStartsAt] = useState('');
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
 
@@ -37,7 +43,6 @@ export default function NewCheckInPage() {
 
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load user's groups and check for active check-in
   useEffect(() => {
     async function init() {
       const { data: { user } } = await supabase.auth.getUser();
@@ -62,7 +67,6 @@ export default function NewCheckInPage() {
     init();
   }, [supabase]);
 
-  // Debounced building search
   useEffect(() => {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
 
@@ -116,6 +120,8 @@ export default function NewCheckInPage() {
     );
   }
 
+  const isFuture = startsAt && new Date(startsAt) > new Date();
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!building || !vibe || selectedGroups.length === 0) {
@@ -128,6 +134,10 @@ export default function NewCheckInPage() {
 
     const { data: { user } } = await supabase.auth.getUser();
 
+    const startMs = startsAt ? new Date(startsAt).getTime() : Date.now();
+    const expiresAt = new Date(startMs + durationMs).toISOString();
+    const startsAtIso = startsAt ? new Date(startsAt).toISOString() : null;
+
     const { data: checkIn, error: ciErr } = await supabase
       .from('check_ins')
       .insert({
@@ -137,7 +147,8 @@ export default function NewCheckInPage() {
         vibe,
         is_open: isOpen,
         note: note.trim() || null,
-        expires_at: new Date(Date.now() + durationMs).toISOString(),
+        starts_at: startsAtIso,
+        expires_at: expiresAt,
       })
       .select('id')
       .single();
@@ -153,12 +164,13 @@ export default function NewCheckInPage() {
       p_group_ids: selectedGroups,
     });
 
-    // Fire-and-forget push notifications
-    fetch('/api/notify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ checkInId: checkIn.id }),
-    });
+    if (!isFuture) {
+      fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ checkInId: checkIn.id }),
+      });
+    }
 
     router.push('/');
   }
@@ -296,9 +308,39 @@ export default function NewCheckInPage() {
           />
         </div>
 
+        {/* Start time */}
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">
+            Start time <span className="font-normal text-gray-400">(optional, defaults to now)</span>
+          </label>
+          <div className="flex gap-2 items-center">
+            <input
+              type="datetime-local"
+              value={startsAt}
+              min={toDatetimeLocal(new Date())}
+              onChange={(e) => setStartsAt(e.target.value)}
+              className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base bg-white"
+            />
+            {startsAt && (
+              <button
+                type="button"
+                onClick={() => setStartsAt('')}
+                className="text-sm text-gray-400 px-2"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          {isFuture && (
+            <p className="text-xs text-indigo-600 mt-1.5 ml-1">Scheduled check-in — will appear when the time comes</p>
+          )}
+        </div>
+
         {/* Duration */}
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">How long?</label>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">
+            How long?{isFuture && <span className="font-normal text-gray-400"> (from start time)</span>}
+          </label>
           <div className="grid grid-cols-4 gap-2">
             {[
               { label: '30m', ms: 30 * 60 * 1000 },
@@ -369,7 +411,7 @@ export default function NewCheckInPage() {
           disabled={loading || !building || !vibe || selectedGroups.length === 0}
           className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold text-base disabled:opacity-40"
         >
-          {loading ? 'Checking in…' : "I'm here 📍"}
+          {loading ? 'Saving…' : isFuture ? "I'll be there 📍" : "I'm here 📍"}
         </button>
       </form>
     </div>
