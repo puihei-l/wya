@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import CheckInCard from '@/components/CheckInCard';
 import EventCard from '@/components/EventCard';
@@ -15,6 +15,7 @@ export default function HomePage() {
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState('');
+  const fetchAllRef = useRef<() => void>(() => {});
 
   const buildFeed = useCallback((checkIns: CheckIn[], hangouts: Hangout[]) => {
     const items: FeedItem[] = [
@@ -29,54 +30,52 @@ export default function HomePage() {
   useEffect(() => {
     const supabase = createClient();
 
+    async function fetchAll() {
+      const now = new Date().toISOString();
+
+      const [{ data: checkIns }, { data: hangouts }] = await Promise.all([
+        supabase
+          .from('check_ins')
+          .select(
+            `id, user_id, floor, vibe, is_open, note, expires_at, created_at,
+             profiles:user_id (id, username, display_name, avatar_url),
+             buildings:building_id (id, name, address)`
+          )
+          .gt('expires_at', now)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('hangouts')
+          .select(
+            `id, title, planned_at, ends_at, note, creator_id,
+             profiles:creator_id (id, username, display_name, avatar_url),
+             buildings:building_id (id, name, address),
+             hangout_participants (user_id, status)`
+          )
+          .lte('planned_at', now)
+          .gte('ends_at', now)
+          .order('planned_at', { ascending: false }),
+      ]);
+
+      buildFeed(
+        (checkIns as unknown as CheckIn[]) ?? [],
+        (hangouts as unknown as Hangout[]) ?? []
+      );
+    }
+
     async function init() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       setCurrentUserId(user.id);
-
-      async function fetchAll() {
-        const now = new Date().toISOString();
-        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-
-        const [{ data: checkIns }, { data: hangouts }] = await Promise.all([
-          supabase
-            .from('check_ins')
-            .select(
-              `id, user_id, floor, vibe, is_open, note, expires_at, created_at,
-               profiles:user_id (id, username, display_name, avatar_url),
-               buildings:building_id (id, name, address)`
-            )
-            .gt('expires_at', now)
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('hangouts')
-            .select(
-              `id, title, planned_at, note, creator_id,
-               profiles:creator_id (id, username, display_name, avatar_url),
-               buildings:building_id (id, name, address),
-               hangout_participants (user_id, status)`
-            )
-            .lte('planned_at', now)
-            .gte('planned_at', twoHoursAgo)
-            .order('planned_at', { ascending: false }),
-        ]);
-
-        buildFeed(
-          (checkIns as unknown as CheckIn[]) ?? [],
-          (hangouts as unknown as Hangout[]) ?? []
-        );
-      }
+      fetchAllRef.current = fetchAll;
 
       await fetchAll();
 
-      // Refresh when check-ins or RSVP statuses change
       supabase
         .channel('feed')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'check_ins' }, fetchAll)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'hangout_participants' }, fetchAll)
         .subscribe();
 
-      // Refresh when this user gets added to a new group (so their friend's pin appears immediately)
       supabase
         .channel('my-memberships')
         .on('postgres_changes', {
@@ -124,9 +123,19 @@ export default function HomePage() {
         <div className="space-y-3 pb-6">
           {feed.map((item) =>
             item.type === 'check_in' ? (
-              <CheckInCard key={item.data.id} checkIn={item.data} />
+              <CheckInCard
+                key={item.data.id}
+                checkIn={item.data}
+                currentUserId={currentUserId}
+                onUpdate={() => fetchAllRef.current()}
+              />
             ) : (
-              <EventCard key={item.data.id} hangout={item.data} currentUserId={currentUserId} />
+              <EventCard
+                key={item.data.id}
+                hangout={item.data}
+                currentUserId={currentUserId}
+                onUpdate={() => fetchAllRef.current()}
+              />
             )
           )}
         </div>

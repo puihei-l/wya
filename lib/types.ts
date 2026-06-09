@@ -42,6 +42,7 @@ export interface Hangout {
   id: string;
   title: string;
   planned_at: string;
+  ends_at: string;
   note: string | null;
   creator_id: string;
   buildings: Building | null;

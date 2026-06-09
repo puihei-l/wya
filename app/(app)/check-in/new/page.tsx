@@ -29,6 +29,7 @@ export default function NewCheckInPage() {
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
 
+  const [durationMs, setDurationMs] = useState(2 * 60 * 60 * 1000);
   const [hasActiveCheckIn, setHasActiveCheckIn] = useState(false);
   const [activeCheckInId, setActiveCheckInId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -136,6 +137,7 @@ export default function NewCheckInPage() {
         vibe,
         is_open: isOpen,
         note: note.trim() || null,
+        expires_at: new Date(Date.now() + durationMs).toISOString(),
       })
       .select('id')
       .single();
@@ -292,6 +294,32 @@ export default function NewCheckInPage() {
             maxLength={100}
             className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base bg-white"
           />
+        </div>
+
+        {/* Duration */}
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">How long?</label>
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              { label: '30m', ms: 30 * 60 * 1000 },
+              { label: '1hr', ms: 60 * 60 * 1000 },
+              { label: '2hr', ms: 2 * 60 * 60 * 1000 },
+              { label: '4hr', ms: 4 * 60 * 60 * 1000 },
+            ].map((d) => (
+              <button
+                key={d.label}
+                type="button"
+                onClick={() => setDurationMs(d.ms)}
+                className={`py-2.5 rounded-xl border-2 text-sm font-medium transition-colors ${
+                  durationMs === d.ms
+                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                    : 'border-gray-100 bg-white text-gray-600'
+                }`}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Groups */}
