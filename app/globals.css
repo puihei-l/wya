@@ -1,1 +1,23 @@
 @import "tailwindcss";
+
+:root {
+  --primary: #6366f1;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  /* Prevent text size adjustment on orientation change */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  overscroll-behavior: none;
+}
+
+/* Safe area insets for notch/home indicator */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
