@@ -49,6 +49,16 @@ export interface Hangout {
   hangout_participants: { user_id: string; status: string }[];
 }
 
+export interface FriendRequest {
+  id: string;
+  from_id: string;
+  to_id: string;
+  status: 'pending' | 'accepted' | 'declined';
+  created_at: string;
+  from_profile: Profile;
+  to_profile: Profile;
+}
+
 export interface BuildingEdit {
   id: string;
   building_id: string;

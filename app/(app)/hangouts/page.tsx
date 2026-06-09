@@ -5,13 +5,6 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import type { Hangout } from '@/lib/types';
 
-const STATUS_LABELS: Record<string, string> = {
-  going: '✅ Going',
-  maybe: '🤔 Maybe',
-  not_going: '❌ Can\'t make it',
-  invited: 'Invited',
-};
-
 function formatDate(d: string) {
   const date = new Date(d);
   return date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -39,7 +32,6 @@ export default function HangoutsPage() {
            hangout_participants (user_id, status)`
         )
         .gte('planned_at', new Date().toISOString())
-        .or(`creator_id.eq.${user.id},hangout_participants.user_id.eq.${user.id}`)
         .order('planned_at', { ascending: true });
 
       setHangouts((data as unknown as Hangout[]) ?? []);
