@@ -86,9 +86,10 @@ export default function NewHangoutPage() {
     await supabase.from('hangout_participants').insert({ hangout_id: hangout.id, user_id: user!.id, status: 'going' });
 
     // Share to groups (invite group members)
-    await supabase.from('hangout_groups').insert(
-      selectedGroups.map((group_id) => ({ hangout_id: hangout.id, group_id }))
-    );
+    await supabase.rpc('link_hangout_to_groups', {
+      p_hangout_id: hangout.id,
+      p_group_ids: selectedGroups,
+    });
 
     router.push('/hangouts');
   }
