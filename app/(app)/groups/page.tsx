@@ -2,11 +2,13 @@
 
 import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { GroupWithMembers, Profile, FriendRequest } from '@/lib/types';
 
 export default function GroupsPage() {
   const supabase = createClient();
+  const router = useRouter();
   const [currentUserId, setCurrentUserId] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -138,6 +140,11 @@ export default function GroupsPage() {
     fetchAll();
   }
 
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    router.push('/login');
+  }
+
   async function deleteGroup(groupId: string) {
     if (!confirm('Delete this group?')) return;
     await supabase.from('friend_groups').delete().eq('id', groupId);
@@ -146,7 +153,12 @@ export default function GroupsPage() {
 
   return (
     <div className="max-w-lg mx-auto px-4 pt-6 pb-6">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Friends</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Friends</h1>
+        <button onClick={handleSignOut} className="text-sm text-gray-400 hover:text-gray-600">
+          Sign out
+        </button>
+      </div>
 
       {/* Incoming friend requests */}
       {incomingPending.length > 0 && (

@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -18,10 +18,26 @@ export default function LoginPage() {
     setError('');
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (error) {
-      setError(error.message);
+    let email = identifier.trim();
+
+    if (!email.includes('@')) {
+      const username = email.startsWith('@') ? email.slice(1) : email;
+      const { data, error: rpcError } = await supabase.rpc('get_email_for_username', {
+        p_username: username,
+      });
+      if (rpcError || !data) {
+        setError('No account found for that username.');
+        setLoading(false);
+        return;
+      }
+      email = data as string;
+    }
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (signInError) {
+      setError(signInError.message);
       setLoading(false);
     } else {
       router.push('/');
@@ -39,15 +55,16 @@ export default function LoginPage() {
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Email or username</label>
             <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="text"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base bg-white"
-              placeholder="you@example.com"
+              placeholder="you@example.com or username"
               required
-              autoComplete="email"
+              autoComplete="username"
+              autoCapitalize="none"
             />
           </div>
           <div>
