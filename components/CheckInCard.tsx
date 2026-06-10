@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import type { CheckIn, Vibe } from '@/lib/types';
+import type { CheckIn, Vibe, Group } from '@/lib/types';
 
 const VIBE: Record<string, { emoji: string; label: string; bg: string; text: string }> = {
   studying: { emoji: '📚', label: 'Studying', bg: 'bg-amber-100', text: 'text-amber-700' },
@@ -98,10 +98,30 @@ export default function CheckInCard({
     isIndefinite(checkIn.expires_at) ? INDEFINITE : 2 * 60 * 60 * 1000
   );
   const [saving, setSaving] = useState(false);
+  const [editGroups, setEditGroups] = useState<Group[]>([]);
+  const [editSelectedGroups, setEditSelectedGroups] = useState<string[]>([]);
+  const [editShareAll, setEditShareAll] = useState(false);
+  const [groupsLoading, setGroupsLoading] = useState(false);
 
   const vibeInfo = VIBE[checkIn.vibe] ?? VIBE.chilling;
   const left = timeLeft(checkIn.expires_at);
   const until = checkIn.starts_at ? timeUntil(checkIn.starts_at) : null;
+
+  async function openEdit() {
+    setIsEditing(true);
+    setGroupsLoading(true);
+    const supabase = createClient();
+    const [{ data: groupsData }, { data: linkedData }] = await Promise.all([
+      supabase.from('friend_groups').select('id, name, emoji, owner_id').eq('owner_id', checkIn.user_id),
+      supabase.from('check_in_groups').select('group_id').eq('check_in_id', checkIn.id),
+    ]);
+    const available = (groupsData as unknown as Group[]) ?? [];
+    const linked = ((linkedData ?? []) as { group_id: string }[]).map((r) => r.group_id);
+    setEditGroups(available);
+    setEditSelectedGroups(linked);
+    setEditShareAll(available.length > 0 && available.every((g) => linked.includes(g.id)));
+    setGroupsLoading(false);
+  }
 
   async function handleSave() {
     const supabase = createClient();
@@ -118,6 +138,11 @@ export default function CheckInCard({
         expires_at: calcExpiresAt(startMs, durationMs),
       })
       .eq('id', checkIn.id);
+    const finalGroupIds = editShareAll ? editGroups.map((g) => g.id) : editSelectedGroups;
+    await supabase.rpc('update_check_in_groups', {
+      p_check_in_id: checkIn.id,
+      p_group_ids: finalGroupIds,
+    });
     setSaving(false);
     setIsEditing(false);
     onUpdate?.();
@@ -190,7 +215,7 @@ export default function CheckInCard({
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       {!isEditing ? (
         <button
-          onClick={() => setIsEditing(true)}
+          onClick={openEdit}
           className="w-full text-left p-4 active:bg-gray-50"
         >
           {cardBody}
@@ -298,6 +323,49 @@ export default function CheckInCard({
                 </button>
               ))}
             </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Visibility</label>
+            {groupsLoading ? (
+              <p className="text-xs text-gray-400 py-1">Loading…</p>
+            ) : editGroups.length === 0 ? (
+              <p className="text-xs text-gray-400">No groups yet</p>
+            ) : (
+              <div className="space-y-1.5">
+                <label className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 cursor-pointer text-xs transition-colors ${editShareAll ? 'border-indigo-500 bg-indigo-50' : 'border-gray-100 bg-white'}`}>
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={editShareAll}
+                    onChange={() => setEditShareAll((v) => !v)}
+                  />
+                  <span className="font-medium text-gray-900">All friends</span>
+                  <span className="text-gray-400">({editGroups.length})</span>
+                  {editShareAll && <span className="ml-auto text-indigo-600">✓</span>}
+                </label>
+                {!editShareAll && editGroups.map((g) => (
+                  <label
+                    key={g.id}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 cursor-pointer text-xs transition-colors ${editSelectedGroups.includes(g.id) ? 'border-indigo-500 bg-indigo-50' : 'border-gray-100 bg-white'}`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="sr-only"
+                      checked={editSelectedGroups.includes(g.id)}
+                      onChange={() =>
+                        setEditSelectedGroups((prev) =>
+                          prev.includes(g.id) ? prev.filter((id) => id !== g.id) : [...prev, g.id]
+                        )
+                      }
+                    />
+                    <span className="text-base">{g.emoji}</span>
+                    <span className="font-medium text-gray-700">{g.name}</span>
+                    {editSelectedGroups.includes(g.id) && <span className="ml-auto text-indigo-600">✓</span>}
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex gap-2">

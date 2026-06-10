@@ -389,6 +389,28 @@ export default function GroupsPage() {
           })}
         </div>
       )}
+
+      {/* Friends list */}
+      {friends.length > 0 && (
+        <div className="mt-8">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+            Friends · {friends.length}
+          </p>
+          <div className="space-y-2">
+            {friends.map((f) => (
+              <div key={f.id} className="flex items-center gap-3 bg-white rounded-2xl border border-gray-100 px-4 py-3">
+                <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm flex-shrink-0">
+                  {f.display_name.slice(0, 2).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-900">{f.display_name}</p>
+                  <p className="text-xs text-gray-400">@{f.username}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

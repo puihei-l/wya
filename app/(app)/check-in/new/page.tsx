@@ -58,6 +58,7 @@ export default function NewCheckInPage() {
   const [isOpen, setIsOpen] = useState(true);
   const [note, setNote] = useState('');
   const [startsAt, setStartsAt] = useState('');
+  const [shareAll, setShareAll] = useState(false);
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
 
@@ -119,7 +120,7 @@ export default function NewCheckInPage() {
     );
   }
 
-  async function saveCheckIn(userId: string, shortenClash: boolean) {
+  async function saveCheckIn(userId: string, shortenClash: boolean, groupIds: string[]) {
     const startMs = startsAt ? new Date(startsAt).getTime() : Date.now();
     const newStartsAt = new Date(startMs).toISOString();
     const expiresAt = calcExpiresAt(startMs, durationMs);
@@ -154,7 +155,7 @@ export default function NewCheckInPage() {
 
     await supabase.rpc('link_check_in_to_groups', {
       p_check_in_id: checkIn.id,
-      p_group_ids: selectedGroups,
+      p_group_ids: groupIds,
     });
 
     if (!startsAt || new Date(startsAt) <= new Date()) {
@@ -168,9 +169,11 @@ export default function NewCheckInPage() {
     router.push('/');
   }
 
+  const groupsToShare = shareAll ? groups.map((g) => g.id) : selectedGroups;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!building || !vibe || selectedGroups.length === 0) {
+    if (!building || !vibe || groupsToShare.length === 0) {
       setError('Select a location, vibe, and at least one group.');
       return;
     }
@@ -196,7 +199,7 @@ export default function NewCheckInPage() {
       return;
     }
 
-    await saveCheckIn(user!.id, false);
+    await saveCheckIn(user!.id, false, groupsToShare);
   }
 
   const isFuture = startsAt && new Date(startsAt) > new Date();
@@ -358,7 +361,7 @@ export default function NewCheckInPage() {
 
         {/* Groups */}
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">Share to groups</label>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Share with</label>
           {groups.length === 0 ? (
             <div className="bg-gray-50 rounded-xl p-4 text-center">
               <p className="text-sm text-gray-500">
@@ -368,19 +371,37 @@ export default function NewCheckInPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {groups.map((g) => (
-                <label
-                  key={g.id}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 cursor-pointer transition-colors ${
-                    selectedGroups.includes(g.id) ? 'border-indigo-500 bg-indigo-50' : 'border-gray-100 bg-white'
-                  }`}
-                >
-                  <input type="checkbox" checked={selectedGroups.includes(g.id)} onChange={() => toggleGroup(g.id)} className="sr-only" />
-                  <span className="text-xl">{g.emoji}</span>
-                  <span className="font-medium text-gray-900 text-sm">{g.name}</span>
-                  {selectedGroups.includes(g.id) && <span className="ml-auto text-indigo-600">✓</span>}
-                </label>
-              ))}
+              <label className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 cursor-pointer transition-colors ${
+                shareAll ? 'border-indigo-500 bg-indigo-50' : 'border-gray-100 bg-white'
+              }`}>
+                <input type="checkbox" checked={shareAll} onChange={() => setShareAll((v) => !v)} className="sr-only" />
+                <span className="font-medium text-gray-900 text-sm">All friends</span>
+                <span className="text-xs text-gray-400">({groups.length} {groups.length === 1 ? 'group' : 'groups'})</span>
+                {shareAll && <span className="ml-auto text-indigo-600">✓</span>}
+              </label>
+
+              {!shareAll && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <div className="h-px bg-gray-100 flex-1" />
+                    <span className="text-xs text-gray-300">or pick groups</span>
+                    <div className="h-px bg-gray-100 flex-1" />
+                  </div>
+                  {groups.map((g) => (
+                    <label
+                      key={g.id}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 cursor-pointer transition-colors ${
+                        selectedGroups.includes(g.id) ? 'border-indigo-500 bg-indigo-50' : 'border-gray-100 bg-white'
+                      }`}
+                    >
+                      <input type="checkbox" checked={selectedGroups.includes(g.id)} onChange={() => toggleGroup(g.id)} className="sr-only" />
+                      <span className="text-xl">{g.emoji}</span>
+                      <span className="font-medium text-gray-900 text-sm">{g.name}</span>
+                      {selectedGroups.includes(g.id) && <span className="ml-auto text-indigo-600">✓</span>}
+                    </label>
+                  ))}
+                </>
+              )}
             </div>
           )}
         </div>
@@ -403,7 +424,7 @@ export default function NewCheckInPage() {
                 onClick={async () => {
                   setLoading(true);
                   const { data: { user } } = await supabase.auth.getUser();
-                  await saveCheckIn(user!.id, true);
+                  await saveCheckIn(user!.id, true, groupsToShare);
                 }}
                 className="flex-1 py-2.5 bg-amber-600 text-white rounded-xl text-sm font-semibold"
               >
@@ -423,7 +444,7 @@ export default function NewCheckInPage() {
         {!clash && (
           <button
             type="submit"
-            disabled={loading || !building || !vibe || selectedGroups.length === 0}
+            disabled={loading || !building || !vibe || groupsToShare.length === 0}
             className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold text-base disabled:opacity-40"
           >
             {loading ? 'Saving…' : isFuture ? "I'll be there 📍" : "I'm here 📍"}
