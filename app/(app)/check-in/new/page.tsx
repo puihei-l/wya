@@ -11,6 +11,7 @@ const VIBES: { value: Vibe; emoji: string; label: string }[] = [
   { value: 'eating', emoji: '🍜', label: 'Eating' },
   { value: 'working', emoji: '💻', label: 'Working' },
   { value: 'gaming', emoji: '🎮', label: 'Gaming' },
+  { value: 'exercising', emoji: '🏃', label: 'Exercising' },
 ];
 
 const INDEFINITE = -1;
@@ -185,12 +186,14 @@ export default function NewCheckInPage() {
     const { data: { user } } = await supabase.auth.getUser();
     const startMs = startsAt ? new Date(startsAt).getTime() : Date.now();
     const newStartsAt = new Date(startMs).toISOString();
+    const newExpiresAt = calcExpiresAt(startMs, durationMs);
 
     const { data: existing } = await supabase
       .from('check_ins')
       .select('id, expires_at, starts_at, buildings:building_id (name)')
       .eq('user_id', user!.id)
       .gt('expires_at', newStartsAt)
+      .or(`starts_at.is.null,starts_at.lt.${newExpiresAt}`)
       .maybeSingle();
 
     if (existing) {
@@ -267,7 +270,7 @@ export default function NewCheckInPage() {
         {/* Vibe */}
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-2">Vibe</label>
-          <div className="grid grid-cols-5 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {VIBES.map((v) => (
               <button
                 key={v.value}
@@ -343,7 +346,7 @@ export default function NewCheckInPage() {
           <label className="block text-sm font-semibold text-gray-700 mb-2">
             How long?{isFuture && <span className="font-normal text-gray-400"> (from start time)</span>}
           </label>
-          <div className="grid grid-cols-5 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {DURATIONS.map((d) => (
               <button
                 key={d.label}

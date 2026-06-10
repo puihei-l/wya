@@ -10,6 +10,7 @@ const VIBE: Record<string, { emoji: string; label: string; bg: string; text: str
   eating: { emoji: '🍜', label: 'Eating', bg: 'bg-orange-100', text: 'text-orange-700' },
   working: { emoji: '💻', label: 'Working', bg: 'bg-blue-100', text: 'text-blue-700' },
   gaming: { emoji: '🎮', label: 'Gaming', bg: 'bg-purple-100', text: 'text-purple-700' },
+  exercising: { emoji: '🏃', label: 'Exercising', bg: 'bg-red-100', text: 'text-red-700' },
 };
 
 const INDEFINITE = -1;
@@ -189,10 +190,16 @@ export default function CheckInCard({
               {vibeInfo.emoji} {vibeInfo.label}
             </span>
           )}
-          {checkIn.is_open && !isUpcoming && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-600">
-              ✌️ Open to join
-            </span>
+          {!isUpcoming && (
+            checkIn.is_open ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-600">
+                ✌️ Open to join
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+                🔒 Not open
+              </span>
+            )
           )}
           {left && !isUpcoming && <span className="text-xs text-gray-400 ml-auto">{left}</span>}
         </div>
@@ -246,7 +253,7 @@ export default function CheckInCard({
 
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Vibe</label>
-            <div className="grid grid-cols-5 gap-1.5">
+            <div className="grid grid-cols-3 gap-1.5">
               {Object.entries(VIBE).map(([v, info]) => (
                 <button
                   key={v}
@@ -309,7 +316,7 @@ export default function CheckInCard({
             <label className="block text-xs font-semibold text-gray-500 mb-1">
               Time from {editingStartsAtIsFuture ? 'start time' : 'now'}
             </label>
-            <div className="grid grid-cols-5 gap-1.5">
+            <div className="grid grid-cols-3 gap-1.5">
               {DURATIONS.map((d) => (
                 <button
                   key={d.label}

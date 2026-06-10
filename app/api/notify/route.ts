@@ -29,7 +29,7 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
 
   // Get check-in details
-  const { data: checkIn } = await admin
+  const { data: checkIn, error: checkInError } = await admin
     .from('check_ins')
     .select(
       `id, vibe, is_open, user_id,
@@ -39,6 +39,7 @@ export async function POST(request: Request) {
     .eq('id', checkInId)
     .single();
 
+  if (checkInError) return Response.json({ error: checkInError.message }, { status: 500 });
   if (!checkIn) return Response.json({ error: 'Not found' }, { status: 404 });
 
   // Get groups this check-in is shared to

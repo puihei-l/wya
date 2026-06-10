@@ -12,7 +12,7 @@ export interface Building {
   created_by?: string | null;
 }
 
-export type Vibe = 'studying' | 'chilling' | 'eating' | 'working' | 'gaming';
+export type Vibe = 'studying' | 'chilling' | 'eating' | 'working' | 'gaming' | 'exercising';
 
 export interface CheckIn {
   id: string;
