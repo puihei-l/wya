@@ -5,13 +5,13 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { Building, Group, Vibe } from '@/lib/types';
 
-const VIBES: { value: Vibe; emoji: string; label: string }[] = [
-  { value: 'studying', emoji: '📚', label: 'Studying' },
-  { value: 'chilling', emoji: '😌', label: 'Chilling' },
-  { value: 'eating', emoji: '🍜', label: 'Eating' },
-  { value: 'working', emoji: '💻', label: 'Working' },
-  { value: 'gaming', emoji: '🎮', label: 'Gaming' },
-  { value: 'exercising', emoji: '🏃', label: 'Exercising' },
+const VIBES: { value: Vibe; img: string; label: string }[] = [
+  { value: 'chilling',   img: '/vibes/1.png', label: 'Chilling' },
+  { value: 'exercising', img: '/vibes/2.png', label: 'Exercising' },
+  { value: 'eating',     img: '/vibes/3.png', label: 'Eating' },
+  { value: 'studying',   img: '/vibes/4.png', label: 'Studying' },
+  { value: 'gaming',     img: '/vibes/5.png', label: 'Gaming' },
+  { value: 'working',    img: '/vibes/6.png', label: 'Working' },
 ];
 
 const INDEFINITE = -1;
@@ -122,10 +122,10 @@ export default function NewCheckInPage() {
     );
   }
 
-  async function saveCheckIn(userId: string, shortenClash: boolean, groupIds: string[], overrideExpiresAt?: string) {
+  async function saveCheckIn(userId: string, shortenClash: boolean, groupIds: string[]) {
     const startMs = startsAt ? new Date(startsAt).getTime() : Date.now();
     const newStartsAt = new Date(startMs).toISOString();
-    const expiresAt = overrideExpiresAt ?? calcExpiresAt(startMs, durationMs);
+    const expiresAt = calcExpiresAt(startMs, durationMs);
 
     if (shortenClash && clash) {
       await supabase
@@ -187,23 +187,7 @@ export default function NewCheckInPage() {
     const { data: { user } } = await supabase.auth.getUser();
     const startMs = startsAt ? new Date(startsAt).getTime() : Date.now();
     const newStartsAt = new Date(startMs).toISOString();
-    let newExpiresAt = calcExpiresAt(startMs, durationMs);
-
-    if (durationMs === INDEFINITE) {
-      const { data: nextPlanned } = await supabase
-        .from('check_ins')
-        .select('starts_at')
-        .eq('user_id', user!.id)
-        .gt('starts_at', newStartsAt)
-        .order('starts_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      if (nextPlanned?.starts_at) {
-        newExpiresAt = nextPlanned.starts_at;
-      }
-    }
-
-    setPendingExpiresAt(newExpiresAt);
+    const newExpiresAt = calcExpiresAt(startMs, durationMs);
 
     const { data: existing } = await supabase
       .from('check_ins')
@@ -219,7 +203,7 @@ export default function NewCheckInPage() {
       return;
     }
 
-    await saveCheckIn(user!.id, false, groupsToShare, newExpiresAt);
+    await saveCheckIn(user!.id, false, groupsToShare);
   }
 
   const isFuture = startsAt && new Date(startsAt) > new Date();
@@ -297,7 +281,7 @@ export default function NewCheckInPage() {
                   vibe === v.value ? 'border-indigo-500 bg-indigo-50' : 'border-gray-100 bg-white'
                 }`}
               >
-                <span className="text-xl">{v.emoji}</span>
+                <img src={v.img} alt={v.label} className="w-7 h-7 object-contain" />
                 <span className="text-xs font-medium text-gray-600">{v.label}</span>
               </button>
             ))}
@@ -306,9 +290,12 @@ export default function NewCheckInPage() {
 
         {/* Open toggle */}
         <div className="flex items-center justify-between bg-white rounded-xl border border-gray-200 px-4 py-3">
-          <div>
-            <p className="font-medium text-gray-900 text-sm">Open to join</p>
-            <p className="text-xs text-gray-400">Let friends know they can come find you</p>
+          <div className="flex items-center gap-2">
+            <img src={isOpen ? '/unlock.png' : '/lock.png'} alt={isOpen ? 'Open' : 'Closed'} className="w-5 h-5 object-contain" />
+            <div>
+              <p className="font-medium text-gray-900 text-sm">{isOpen ? 'Open to join' : 'Not open'}</p>
+              <p className="text-xs text-gray-400">Let friends know they can come find you</p>
+            </div>
           </div>
           <button
             type="button"
@@ -444,7 +431,7 @@ export default function NewCheckInPage() {
                 onClick={async () => {
                   setLoading(true);
                   const { data: { user } } = await supabase.auth.getUser();
-                  await saveCheckIn(user!.id, true, groupsToShare, pendingExpiresAt ?? undefined);
+                  await saveCheckIn(user!.id, true, groupsToShare);
                 }}
                 className="flex-1 py-2.5 bg-amber-600 text-white rounded-xl text-sm font-semibold"
               >

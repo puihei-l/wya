@@ -4,13 +4,13 @@ import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { CheckIn, Vibe, Group } from '@/lib/types';
 
-const VIBE: Record<string, { emoji: string; label: string; bg: string; text: string }> = {
-  studying: { emoji: '📚', label: 'Studying', bg: 'bg-amber-100', text: 'text-amber-700' },
-  chilling: { emoji: '😌', label: 'Chilling', bg: 'bg-green-100', text: 'text-green-700' },
-  eating: { emoji: '🍜', label: 'Eating', bg: 'bg-orange-100', text: 'text-orange-700' },
-  working: { emoji: '💻', label: 'Working', bg: 'bg-blue-100', text: 'text-blue-700' },
-  gaming: { emoji: '🎮', label: 'Gaming', bg: 'bg-purple-100', text: 'text-purple-700' },
-  exercising: { emoji: '🏃', label: 'Exercising', bg: 'bg-red-100', text: 'text-red-700' },
+const VIBE: Record<string, { img: string; label: string; bg: string; text: string }> = {
+  chilling:   { img: '/vibes/1.png', label: 'Chilling',   bg: 'bg-green-100',  text: 'text-green-700' },
+  exercising: { img: '/vibes/2.png', label: 'Exercising', bg: 'bg-red-100',    text: 'text-red-700' },
+  eating:     { img: '/vibes/3.png', label: 'Eating',     bg: 'bg-orange-100', text: 'text-orange-700' },
+  studying:   { img: '/vibes/4.png', label: 'Studying',   bg: 'bg-amber-100',  text: 'text-amber-700' },
+  gaming:     { img: '/vibes/5.png', label: 'Gaming',     bg: 'bg-purple-100', text: 'text-purple-700' },
+  working:    { img: '/vibes/6.png', label: 'Working',    bg: 'bg-blue-100',   text: 'text-blue-700' },
 };
 
 const INDEFINITE = -1;
@@ -187,17 +187,20 @@ export default function CheckInCard({
             </span>
           ) : (
             <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${vibeInfo.bg} ${vibeInfo.text}`}>
-              {vibeInfo.emoji} {vibeInfo.label}
+              <img src={vibeInfo.img} alt={vibeInfo.label} className="w-3.5 h-3.5 object-contain" />
+              {vibeInfo.label}
             </span>
           )}
           {!isUpcoming && (
             checkIn.is_open ? (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-600">
-                ✌️ Open to join
+                <img src="/unlock.png" alt="Open" className="w-3.5 h-3.5 object-contain" />
+                Open to join
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
-                🔒 Not open
+                <img src="/lock.png" alt="Not open" className="w-3.5 h-3.5 object-contain" />
+                Not open
               </span>
             )
           )}
@@ -263,7 +266,7 @@ export default function CheckInCard({
                     vibe === v ? 'border-indigo-500 bg-indigo-50' : 'border-gray-100 bg-white'
                   }`}
                 >
-                  <span>{info.emoji}</span>
+                  <img src={info.img} alt={info.label} className="w-6 h-6 object-contain" />
                   <span className="text-gray-600 leading-tight">{info.label}</span>
                 </button>
               ))}
@@ -271,7 +274,10 @@ export default function CheckInCard({
           </div>
 
           <div className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-2.5">
-            <span className="text-sm font-medium text-gray-700">Open to join</span>
+            <div className="flex items-center gap-2">
+              <img src={isOpen ? '/unlock.png' : '/lock.png'} alt={isOpen ? 'Open' : 'Closed'} className="w-4 h-4 object-contain" />
+              <span className="text-sm font-medium text-gray-700">{isOpen ? 'Open to join' : 'Not open'}</span>
+            </div>
             <button
               type="button"
               onClick={() => setIsOpen((v) => !v)}

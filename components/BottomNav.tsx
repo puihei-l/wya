@@ -25,9 +25,9 @@ export default function BottomNav() {
   }, [pathname]);
 
   const TABS = [
-    { href: '/', icon: '🏠', label: 'Home' },
-    { href: '/check-in/new', icon: '📍', label: 'Check in', primary: true },
-    { href: '/groups', icon: '👥', label: 'Friends', badge: pendingCount },
+    { href: '/', img: '/1.png', label: 'Home' },
+    { href: '/check-in/new', img: '/2.png', label: 'Check in', primary: true },
+    { href: '/groups', img: '/3.png', label: 'Friends', badge: pendingCount },
   ];
 
   return (
@@ -44,7 +44,7 @@ export default function BottomNav() {
                 href={tab.href}
                 className="flex items-center justify-center w-14 h-14 bg-indigo-600 rounded-full shadow-lg -mt-5 active:scale-95 transition-transform"
               >
-                <span className="text-2xl">{tab.icon}</span>
+                <img src={tab.img} alt={tab.label} className="w-7 h-7 object-contain" />
               </Link>
             );
           }
@@ -53,12 +53,17 @@ export default function BottomNav() {
             <Link
               key={tab.href}
               href={tab.href}
-              className={`relative flex flex-col items-center gap-0.5 px-3 py-2 ${
-                active ? 'text-indigo-600' : 'text-gray-400'
-              }`}
+              className="relative flex flex-col items-center gap-0.5 px-3 py-2"
             >
-              <span className="text-xl">{tab.icon}</span>
-              <span className="text-xs font-medium">{tab.label}</span>
+              <img
+                src={tab.img}
+                alt={tab.label}
+                className="w-6 h-6 object-contain transition-opacity"
+                style={{ opacity: active ? 1 : 0.4 }}
+              />
+              <span className={`text-xs font-medium ${active ? 'text-indigo-600' : 'text-gray-400'}`}>
+                {tab.label}
+              </span>
               {(tab.badge ?? 0) > 0 && (
                 <span className="absolute top-1 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
               )}
