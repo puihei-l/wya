@@ -7,33 +7,32 @@ import PushSetup from '@/components/PushSetup';
 import type { CheckIn } from '@/lib/types';
 
 export default function HomePage() {
-  const [feed, setFeed] = useState<CheckIn[]>([]);
+  const [active, setActive] = useState<CheckIn[]>([]);
+  const [upcoming, setUpcoming] = useState<CheckIn[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState('');
   const fetchAllRef = useRef<() => void>(() => {});
 
   const buildFeed = useCallback((checkIns: CheckIn[]) => {
     const now = new Date();
-    const active = checkIns.filter(
-      (c) => !c.starts_at || new Date(c.starts_at) <= now
-    );
-    const upcoming = checkIns.filter(
-      (c) => c.starts_at && new Date(c.starts_at) > now
-    );
-
-    active.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    upcoming.sort((a, b) => new Date(a.starts_at!).getTime() - new Date(b.starts_at!).getTime());
-
-    setFeed([...active, ...upcoming]);
+    const a = checkIns
+      .filter((c) => !c.starts_at || new Date(c.starts_at) <= now)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    const u = checkIns
+      .filter((c) => c.starts_at && new Date(c.starts_at) > now)
+      .sort((a, b) => new Date(a.starts_at!).getTime() - new Date(b.starts_at!).getTime());
+    setActive(a);
+    setUpcoming(u);
     setLoading(false);
   }, []);
 
   useEffect(() => {
     const supabase = createClient();
+    supabase.removeAllChannels();
+    let cancelled = false;
 
     async function fetchAll() {
       const now = new Date().toISOString();
-
       const { data: checkIns } = await supabase
         .from('check_ins')
         .select(
@@ -42,17 +41,16 @@ export default function HomePage() {
            buildings:building_id (id, name, address)`
         )
         .gt('expires_at', now);
-
-      buildFeed((checkIns as unknown as CheckIn[]) ?? []);
+      if (!cancelled) buildFeed((checkIns as unknown as CheckIn[]) ?? []);
     }
 
     async function init() {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (cancelled || !user) return;
       setCurrentUserId(user.id);
       fetchAllRef.current = fetchAll;
-
       await fetchAll();
+      if (cancelled) return;
 
       supabase
         .channel('feed')
@@ -71,13 +69,13 @@ export default function HomePage() {
     }
 
     init();
-
-    return () => { supabase.removeAllChannels(); };
+    return () => {
+      cancelled = true;
+      supabase.removeAllChannels();
+    };
   }, [buildFeed]);
 
-  const now = new Date();
-  const activeCount = feed.filter((c) => !c.starts_at || new Date(c.starts_at) <= now).length;
-  const upcomingCount = feed.filter((c) => c.starts_at && new Date(c.starts_at) > now).length;
+  const onUpdate = () => fetchAllRef.current();
 
   return (
     <div className="max-w-lg mx-auto px-4 pt-6">
@@ -87,8 +85,8 @@ export default function HomePage() {
         <h1 className="text-2xl font-black text-gray-900 tracking-tight">wya</h1>
         {!loading && (
           <span className="text-sm text-gray-400">
-            {activeCount} {activeCount === 1 ? 'person' : 'people'} out
-            {upcomingCount > 0 && ` · ${upcomingCount} heading out soon`}
+            {active.length} {active.length === 1 ? 'person' : 'people'} out
+            {upcoming.length > 0 && ` · ${upcoming.length} heading out soon`}
           </span>
         )}
       </div>
@@ -97,22 +95,46 @@ export default function HomePage() {
         <div className="flex justify-center py-24">
           <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
         </div>
-      ) : feed.length === 0 ? (
+      ) : active.length === 0 && upcoming.length === 0 ? (
         <div className="text-center py-24">
           <p className="text-5xl mb-4">👀</p>
           <p className="text-gray-700 font-semibold text-lg">Nobody&apos;s out right now</p>
           <p className="text-gray-400 text-sm mt-1">Be the first to check in</p>
         </div>
       ) : (
-        <div className="space-y-3 pb-6">
-          {feed.map((checkIn) => (
-            <CheckInCard
-              key={checkIn.id}
-              checkIn={checkIn}
-              currentUserId={currentUserId}
-              onUpdate={() => fetchAllRef.current()}
-            />
-          ))}
+        <div className="pb-6">
+          {active.length === 0 ? (
+            <p className="text-sm text-gray-400 py-4">Nobody&apos;s out right now</p>
+          ) : (
+            <div className="space-y-3">
+              {active.map((checkIn) => (
+                <CheckInCard
+                  key={checkIn.id}
+                  checkIn={checkIn}
+                  currentUserId={currentUserId}
+                  onUpdate={onUpdate}
+                />
+              ))}
+            </div>
+          )}
+
+          {upcoming.length > 0 && (
+            <div className="mt-8">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+                Heading out soon
+              </p>
+              <div className="space-y-3">
+                {upcoming.map((checkIn) => (
+                  <CheckInCard
+                    key={checkIn.id}
+                    checkIn={checkIn}
+                    currentUserId={currentUserId}
+                    onUpdate={onUpdate}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

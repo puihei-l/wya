@@ -12,12 +12,24 @@ const VIBE: Record<string, { emoji: string; label: string; bg: string; text: str
   gaming: { emoji: '🎮', label: 'Gaming', bg: 'bg-purple-100', text: 'text-purple-700' },
 };
 
+const INDEFINITE = -1;
+const FAR_FUTURE = '2099-12-31T23:59:59Z';
+
 const DURATIONS = [
   { label: '30m', ms: 30 * 60 * 1000 },
   { label: '1hr', ms: 60 * 60 * 1000 },
   { label: '2hr', ms: 2 * 60 * 60 * 1000 },
   { label: '4hr', ms: 4 * 60 * 60 * 1000 },
+  { label: '∞', ms: INDEFINITE },
 ];
+
+function isIndefinite(expires: string) {
+  return new Date(expires).getFullYear() >= 2099;
+}
+
+function calcExpiresAt(startMs: number, durationMs: number): string {
+  return durationMs === INDEFINITE ? FAR_FUTURE : new Date(startMs + durationMs).toISOString();
+}
 
 function timeAgo(date: string) {
   const secs = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
@@ -28,6 +40,7 @@ function timeAgo(date: string) {
 }
 
 function timeLeft(expires: string) {
+  if (isIndefinite(expires)) return null;
   const mins = Math.floor((new Date(expires).getTime() - Date.now()) / 60000);
   if (mins <= 0) return null;
   if (mins < 60) return `${mins}m left`;
@@ -81,7 +94,9 @@ export default function CheckInCard({
   const [isOpen, setIsOpen] = useState(checkIn.is_open);
   const [note, setNote] = useState(checkIn.note ?? '');
   const [startsAt, setStartsAt] = useState(checkIn.starts_at ? toDatetimeLocal(checkIn.starts_at) : '');
-  const [durationMs, setDurationMs] = useState(2 * 60 * 60 * 1000);
+  const [durationMs, setDurationMs] = useState(
+    isIndefinite(checkIn.expires_at) ? INDEFINITE : 2 * 60 * 60 * 1000
+  );
   const [saving, setSaving] = useState(false);
 
   const vibeInfo = VIBE[checkIn.vibe] ?? VIBE.chilling;
@@ -100,7 +115,7 @@ export default function CheckInCard({
         is_open: isOpen,
         note: note.trim() || null,
         starts_at: startsAt ? new Date(startsAt).toISOString() : null,
-        expires_at: new Date(startMs + durationMs).toISOString(),
+        expires_at: calcExpiresAt(startMs, durationMs),
       })
       .eq('id', checkIn.id);
     setSaving(false);
@@ -269,7 +284,7 @@ export default function CheckInCard({
             <label className="block text-xs font-semibold text-gray-500 mb-1">
               Time from {editingStartsAtIsFuture ? 'start time' : 'now'}
             </label>
-            <div className="grid grid-cols-4 gap-1.5">
+            <div className="grid grid-cols-5 gap-1.5">
               {DURATIONS.map((d) => (
                 <button
                   key={d.label}
