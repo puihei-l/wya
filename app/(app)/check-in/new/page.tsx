@@ -65,6 +65,7 @@ export default function NewCheckInPage() {
 
   const [durationMs, setDurationMs] = useState(2 * 60 * 60 * 1000);
   const [clash, setClash] = useState<ClashingCheckIn | null>(null);
+  const [pendingExpiresAt, setPendingExpiresAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -121,10 +122,10 @@ export default function NewCheckInPage() {
     );
   }
 
-  async function saveCheckIn(userId: string, shortenClash: boolean, groupIds: string[]) {
+  async function saveCheckIn(userId: string, shortenClash: boolean, groupIds: string[], overrideExpiresAt?: string) {
     const startMs = startsAt ? new Date(startsAt).getTime() : Date.now();
     const newStartsAt = new Date(startMs).toISOString();
-    const expiresAt = calcExpiresAt(startMs, durationMs);
+    const expiresAt = overrideExpiresAt ?? calcExpiresAt(startMs, durationMs);
 
     if (shortenClash && clash) {
       await supabase
@@ -186,7 +187,23 @@ export default function NewCheckInPage() {
     const { data: { user } } = await supabase.auth.getUser();
     const startMs = startsAt ? new Date(startsAt).getTime() : Date.now();
     const newStartsAt = new Date(startMs).toISOString();
-    const newExpiresAt = calcExpiresAt(startMs, durationMs);
+    let newExpiresAt = calcExpiresAt(startMs, durationMs);
+
+    if (durationMs === INDEFINITE) {
+      const { data: nextPlanned } = await supabase
+        .from('check_ins')
+        .select('starts_at')
+        .eq('user_id', user!.id)
+        .gt('starts_at', newStartsAt)
+        .order('starts_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (nextPlanned?.starts_at) {
+        newExpiresAt = nextPlanned.starts_at;
+      }
+    }
+
+    setPendingExpiresAt(newExpiresAt);
 
     const { data: existing } = await supabase
       .from('check_ins')
@@ -202,7 +219,7 @@ export default function NewCheckInPage() {
       return;
     }
 
-    await saveCheckIn(user!.id, false, groupsToShare);
+    await saveCheckIn(user!.id, false, groupsToShare, newExpiresAt);
   }
 
   const isFuture = startsAt && new Date(startsAt) > new Date();
@@ -427,7 +444,7 @@ export default function NewCheckInPage() {
                 onClick={async () => {
                   setLoading(true);
                   const { data: { user } } = await supabase.auth.getUser();
-                  await saveCheckIn(user!.id, true, groupsToShare);
+                  await saveCheckIn(user!.id, true, groupsToShare, pendingExpiresAt ?? undefined);
                 }}
                 className="flex-1 py-2.5 bg-amber-600 text-white rounded-xl text-sm font-semibold"
               >
