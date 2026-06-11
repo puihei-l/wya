@@ -10,6 +10,9 @@ export interface Building {
   name: string;
   address: string | null;
   created_by?: string | null;
+  num_floors?: number | null;
+  floor_label?: string | null;
+  notable_spots?: string[] | null;
 }
 
 export type Vibe = 'studying' | 'chilling' | 'eating' | 'working' | 'gaming' | 'exercising';
@@ -24,8 +27,9 @@ export interface CheckIn {
   starts_at: string | null;
   expires_at: string;
   created_at: string;
+  custom_location: string | null;
   profiles: Profile;
-  buildings: Building;
+  buildings: Building | null;
 }
 
 export interface Group {

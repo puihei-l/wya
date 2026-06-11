@@ -177,7 +177,7 @@ export default function CheckInCard({
           </span>
         </div>
         <p className="text-sm text-gray-600 truncate mt-0.5">
-          {checkIn.buildings.name}
+          {checkIn.buildings?.name ?? checkIn.custom_location ?? 'Unknown location'}
           {checkIn.floor && <span className="text-gray-400"> · Floor {checkIn.floor}</span>}
         </p>
         <div className="flex flex-wrap items-center gap-2 mt-2">

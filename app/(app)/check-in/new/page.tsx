@@ -45,6 +45,11 @@ function calcExpiresAt(startMs: number, durationMs: number): string {
   return durationMs === INDEFINITE ? FAR_FUTURE : new Date(startMs + durationMs).toISOString();
 }
 
+function isValidBuildingName(s: string): boolean {
+  const t = s.trim();
+  return t.length >= 3 && /[a-zA-Z]/.test(t) && /^[a-zA-Z0-9 \-']+$/.test(t);
+}
+
 export default function NewCheckInPage() {
   const router = useRouter();
   const supabase = createClient();
@@ -53,6 +58,13 @@ export default function NewCheckInPage() {
   const [buildingQuery, setBuildingQuery] = useState('');
   const [buildingResults, setBuildingResults] = useState<Building[]>([]);
   const [showResults, setShowResults] = useState(false);
+
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newFloors, setNewFloors] = useState('');
+  const [newFloorLabel, setNewFloorLabel] = useState('Floor');
+  const [newSpots, setNewSpots] = useState('');
+  const [addingBuilding, setAddingBuilding] = useState(false);
 
   const [floor, setFloor] = useState('');
   const [vibe, setVibe] = useState<Vibe | ''>('');
@@ -104,16 +116,39 @@ export default function NewCheckInPage() {
     setShowResults(false);
   }
 
-  async function addNewBuilding() {
-    const name = buildingQuery.trim();
+  function openAddForm() {
+    setNewName(buildingQuery.trim());
+    setNewFloors('');
+    setNewFloorLabel('Floor');
+    setNewSpots('');
+    setShowResults(false);
+    setShowAddForm(true);
+  }
+
+  async function submitNewBuilding() {
+    const name = newName.trim();
     if (!name) return;
+    setAddingBuilding(true);
     const { data: { user } } = await supabase.auth.getUser();
+    const spotsArray = newSpots.trim()
+      ? newSpots.split(',').map((s) => s.trim()).filter(Boolean)
+      : null;
     const { data } = await supabase
       .from('buildings')
-      .insert({ name, created_by: user!.id })
-      .select('id, name, address')
+      .insert({
+        name,
+        created_by: user!.id,
+        num_floors: newFloors ? parseInt(newFloors, 10) : null,
+        floor_label: newFloorLabel,
+        notable_spots: spotsArray,
+      })
+      .select('id, name, address, num_floors, floor_label, notable_spots')
       .single();
-    if (data) selectBuilding(data);
+    setAddingBuilding(false);
+    if (data) {
+      selectBuilding(data);
+      setShowAddForm(false);
+    }
   }
 
   function toggleGroup(id: string) {
@@ -122,10 +157,10 @@ export default function NewCheckInPage() {
     );
   }
 
-  async function saveCheckIn(userId: string, shortenClash: boolean, groupIds: string[]) {
+  async function saveCheckIn(userId: string, shortenClash: boolean, groupIds: string[], overrideExpiresAt?: string) {
     const startMs = startsAt ? new Date(startsAt).getTime() : Date.now();
     const newStartsAt = new Date(startMs).toISOString();
-    const expiresAt = calcExpiresAt(startMs, durationMs);
+    const expiresAt = overrideExpiresAt ?? calcExpiresAt(startMs, durationMs);
 
     if (shortenClash && clash) {
       await supabase
@@ -138,7 +173,8 @@ export default function NewCheckInPage() {
       .from('check_ins')
       .insert({
         user_id: userId,
-        building_id: building!.id,
+        building_id: building?.id ?? null,
+        custom_location: building ? null : buildingQuery.trim() || null,
         floor: floor.trim() || null,
         vibe,
         is_open: isOpen,
@@ -173,10 +209,10 @@ export default function NewCheckInPage() {
 
   const groupsToShare = shareAll ? groups.map((g) => g.id) : selectedGroups;
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.SyntheticEvent) {
     e.preventDefault();
-    if (!building || !vibe || groupsToShare.length === 0) {
-      setError('Select a location, vibe, and at least one group.');
+    if ((!building && !buildingQuery.trim()) || !vibe || groupsToShare.length === 0) {
+      setError('Type a location, pick a vibe, and select at least one group.');
       return;
     }
 
@@ -187,7 +223,21 @@ export default function NewCheckInPage() {
     const { data: { user } } = await supabase.auth.getUser();
     const startMs = startsAt ? new Date(startsAt).getTime() : Date.now();
     const newStartsAt = new Date(startMs).toISOString();
-    const newExpiresAt = calcExpiresAt(startMs, durationMs);
+    let newExpiresAt = calcExpiresAt(startMs, durationMs);
+
+    if (durationMs === INDEFINITE) {
+      const { data: nextPlanned } = await supabase
+        .from('check_ins')
+        .select('starts_at')
+        .eq('user_id', user!.id)
+        .gt('starts_at', newStartsAt)
+        .order('starts_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (nextPlanned?.starts_at) newExpiresAt = nextPlanned.starts_at;
+    }
+
+    setPendingExpiresAt(newExpiresAt);
 
     const { data: existing } = await supabase
       .from('check_ins')
@@ -203,7 +253,7 @@ export default function NewCheckInPage() {
       return;
     }
 
-    await saveCheckIn(user!.id, false, groupsToShare);
+    await saveCheckIn(user!.id, false, groupsToShare, newExpiresAt);
   }
 
   const isFuture = startsAt && new Date(startsAt) > new Date();
@@ -216,42 +266,110 @@ export default function NewCheckInPage() {
         {/* Building */}
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-2">Location</label>
-          <div className="relative">
-            <input
-              type="text"
-              value={buildingQuery}
-              onChange={(e) => { setBuildingQuery(e.target.value); setBuilding(null); }}
-              onFocus={() => buildingResults.length > 0 && setShowResults(true)}
-              placeholder="Search or add a building…"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base bg-white"
-              autoComplete="off"
-            />
-            {showResults && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-gray-200 shadow-lg z-10 overflow-hidden">
-                {buildingResults.map((b) => (
-                  <button
-                    key={b.id}
-                    type="button"
-                    onClick={() => selectBuilding(b)}
-                    className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-0"
-                  >
-                    <p className="font-medium text-gray-900 text-sm">{b.name}</p>
-                    {b.address && <p className="text-xs text-gray-400">{b.address}</p>}
-                  </button>
-                ))}
-                {buildingQuery.trim() && buildingResults.every((b) => b.name.toLowerCase() !== buildingQuery.trim().toLowerCase()) && (
-                  <button
-                    type="button"
-                    onClick={addNewBuilding}
-                    className="w-full text-left px-4 py-3 text-indigo-600 font-medium text-sm hover:bg-indigo-50"
-                  >
-                    + Add &ldquo;{buildingQuery.trim()}&rdquo;
-                  </button>
-                )}
+          {!showAddForm ? (
+            <div className="relative">
+              <input
+                type="text"
+                value={buildingQuery}
+                onChange={(e) => { setBuildingQuery(e.target.value); setBuilding(null); }}
+                onFocus={() => buildingResults.length > 0 && setShowResults(true)}
+                placeholder="Search for a place…"
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base bg-white"
+                autoComplete="off"
+              />
+              {showResults && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-gray-200 shadow-lg z-10 overflow-hidden">
+                  {buildingResults.map((b) => (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => selectBuilding(b)}
+                      className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-0"
+                    >
+                      <p className="font-medium text-gray-900 text-sm">{b.name}</p>
+                      {b.address && <p className="text-xs text-gray-400">{b.address}</p>}
+                    </button>
+                  ))}
+                  {isValidBuildingName(buildingQuery) &&
+                    buildingResults.every((b) => b.name.toLowerCase() !== buildingQuery.trim().toLowerCase()) && (
+                    <button
+                      type="button"
+                      onClick={openAddForm}
+                      className="w-full text-left px-4 py-3 text-indigo-600 font-medium text-sm hover:bg-indigo-50"
+                    >
+                      + Add &ldquo;{buildingQuery.trim()}&rdquo;
+                    </button>
+                  )}
+                </div>
+              )}
+              {building && <p className="text-xs text-green-600 mt-1.5 ml-1">✓ {building.name}</p>}
+            </div>
+          ) : (
+            <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-gray-700">Add new place</p>
+                <button type="button" onClick={() => setShowAddForm(false)} className="text-xs text-gray-400">Cancel</button>
               </div>
-            )}
-          </div>
-          {building && <p className="text-xs text-green-600 mt-1.5 ml-1">✓ {building.name}</p>}
+
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Building name</label>
+                <input
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Number of floors</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={newFloors}
+                    onChange={(e) => setNewFloors(e.target.value)}
+                    placeholder="e.g. 5"
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Floor label</label>
+                  <select
+                    value={newFloorLabel}
+                    onChange={(e) => setNewFloorLabel(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                  >
+                    <option>Floor</option>
+                    <option>Level</option>
+                    <option>Ground</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">
+                  Notable spots <span className="font-normal text-gray-400">(optional, comma separated)</span>
+                </label>
+                <input
+                  type="text"
+                  value={newSpots}
+                  onChange={(e) => setNewSpots(e.target.value)}
+                  placeholder="e.g. Canteen, Library, Gym"
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={submitNewBuilding}
+                disabled={addingBuilding || !newName.trim()}
+                className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
+              >
+                {addingBuilding ? 'Adding…' : 'Add place'}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Floor */}
@@ -431,7 +549,7 @@ export default function NewCheckInPage() {
                 onClick={async () => {
                   setLoading(true);
                   const { data: { user } } = await supabase.auth.getUser();
-                  await saveCheckIn(user!.id, true, groupsToShare);
+                  await saveCheckIn(user!.id, true, groupsToShare, pendingExpiresAt ?? undefined);
                 }}
                 className="flex-1 py-2.5 bg-amber-600 text-white rounded-xl text-sm font-semibold"
               >
@@ -451,7 +569,7 @@ export default function NewCheckInPage() {
         {!clash && (
           <button
             type="submit"
-            disabled={loading || !building || !vibe || groupsToShare.length === 0}
+            disabled={loading || (!building && !buildingQuery.trim()) || !vibe || groupsToShare.length === 0}
             className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold text-base disabled:opacity-40"
           >
             {loading ? 'Saving…' : isFuture ? "I'll be there 📍" : "I'm here 📍"}

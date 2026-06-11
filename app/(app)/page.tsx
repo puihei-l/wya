@@ -36,7 +36,7 @@ export default function HomePage() {
       const { data: checkIns } = await supabase
         .from('check_ins')
         .select(
-          `id, user_id, floor, vibe, is_open, note, starts_at, expires_at, created_at,
+          `id, user_id, floor, vibe, is_open, note, starts_at, expires_at, created_at, custom_location,
            profiles:user_id (id, username, display_name, avatar_url),
            buildings:building_id (id, name, address)`
         )
