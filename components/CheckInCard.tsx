@@ -178,7 +178,7 @@ export default function CheckInCard({
         </div>
         <p className="text-sm text-gray-600 truncate mt-0.5">
           {checkIn.buildings?.name ?? checkIn.custom_location ?? 'Unknown location'}
-          {checkIn.floor && <span className="text-gray-400"> · Floor {checkIn.floor}</span>}
+          {checkIn.floor && <span className="text-gray-400"> · {checkIn.floor}</span>}
         </p>
         <div className="flex flex-wrap items-center gap-2 mt-2">
           {isUpcoming ? (
@@ -244,12 +244,12 @@ export default function CheckInCard({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-500 mb-1">Floor</label>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Area</label>
             <input
               type="text"
               value={floor}
               onChange={(e) => setFloor(e.target.value)}
-              placeholder="e.g. 3, Ground"
+              placeholder="e.g. 3rd floor, Room 204, Rooftop"
               className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
             />
           </div>
@@ -293,7 +293,7 @@ export default function CheckInCard({
               type="text"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Anything to add?"
+              placeholder="Add a comment…"
               className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
             />
           </div>

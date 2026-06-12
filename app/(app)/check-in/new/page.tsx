@@ -332,45 +332,6 @@ export default function NewCheckInPage() {
                 />
               </div>
 
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Number of floors</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={newFloors}
-                    onChange={(e) => setNewFloors(e.target.value)}
-                    placeholder="e.g. 5"
-                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-                  />
-                </div>
-                <div className="flex-1">
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Floor label</label>
-                  <select
-                    value={newFloorLabel}
-                    onChange={(e) => setNewFloorLabel(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-                  >
-                    <option>Floor</option>
-                    <option>Level</option>
-                    <option>Ground</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">
-                  Notable spots <span className="font-normal text-gray-400">(optional, comma separated)</span>
-                </label>
-                <input
-                  type="text"
-                  value={newSpots}
-                  onChange={(e) => setNewSpots(e.target.value)}
-                  placeholder="e.g. Canteen, Library, Gym"
-                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-                />
-              </div>
-
               <button
                 type="button"
                 onClick={submitNewBuilding}
@@ -386,13 +347,13 @@ export default function NewCheckInPage() {
         {/* Floor */}
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Floor <span className="font-normal text-gray-400">(optional)</span>
+            Area <span className="font-normal text-gray-400">(optional)</span>
           </label>
           <input
             type="text"
             value={floor}
             onChange={(e) => setFloor(e.target.value)}
-            placeholder="e.g. 3, Ground, Basement"
+            placeholder="e.g. 3rd floor, Room 204, Rooftop"
             className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base bg-white"
           />
         </div>
@@ -444,7 +405,7 @@ export default function NewCheckInPage() {
             type="text"
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="e.g. Near the window seats"
+            placeholder="Add a comment…"
             maxLength={100}
             className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base bg-white"
           />
