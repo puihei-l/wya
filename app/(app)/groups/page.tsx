@@ -21,6 +21,17 @@ export default function GroupsPage() {
   const [findQuery, setFindQuery] = useState('');
   const [findResults, setFindResults] = useState<Profile[]>([]);
   const findTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const findContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (findContainerRef.current && !findContainerRef.current.contains(e.target as Node)) {
+        setShowFind(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const [memberQuery, setMemberQuery] = useState<Record<string, string>>({});
 
@@ -115,11 +126,16 @@ export default function GroupsPage() {
     const q = memberQuery[groupId] ?? '';
     if (!q.trim()) return [];
     const lower = q.toLowerCase();
-    return friends.filter(
-      (f) =>
-        f.username.toLowerCase().includes(lower) ||
-        f.display_name.toLowerCase().includes(lower)
+    const existingIds = new Set(
+      (groups.find((g) => g.id === groupId)?.friend_group_members ?? []).map((m) => m.user_id)
     );
+    return friends
+      .filter(
+        (f) =>
+          !existingIds.has(f.id) &&
+          (f.username.toLowerCase().includes(lower) || f.display_name.toLowerCase().includes(lower))
+      )
+      .sort((a, b) => a.display_name.localeCompare(b.display_name));
   }
 
   async function addMember(groupId: string, userId: string) {
@@ -200,7 +216,7 @@ export default function GroupsPage() {
       )}
 
       {/* Find friends */}
-      <div className="mb-6">
+      <div className="mb-6" ref={findContainerRef}>
         <button
           onClick={() => setShowFind((v) => !v)}
           className="w-full flex items-center justify-between px-4 py-3 bg-white rounded-2xl border border-gray-100 text-sm font-semibold text-gray-700"
@@ -300,7 +316,7 @@ export default function GroupsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {groups.map((group) => {
+          {[...groups].sort((a, b) => a.name.localeCompare(b.name)).map((group) => {
             const isExpanded = expandedId === group.id;
             const nonOwnerMembers = (group.friend_group_members ?? []).filter(
               (m) => m.user_id !== currentUserId
@@ -309,7 +325,7 @@ export default function GroupsPage() {
             const mResults = memberResults(group.id);
 
             return (
-              <div key={group.id} className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+              <div key={group.id} className="bg-white rounded-2xl border border-gray-100">
                 <button
                   onClick={() => setExpandedId(isExpanded ? null : group.id)}
                   className="w-full flex items-center gap-3 px-4 py-4 text-left"
@@ -328,7 +344,7 @@ export default function GroupsPage() {
                   <div className="border-t border-gray-100 px-4 pb-4">
                     {nonOwnerMembers.length > 0 && (
                       <div className="mt-3 space-y-2 mb-4">
-                        {nonOwnerMembers.map((m) => (
+                        {[...nonOwnerMembers].sort((a, b) => a.profiles.display_name.localeCompare(b.profiles.display_name)).map((m) => (
                           <div key={m.user_id} className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-xs">
                               {m.profiles.display_name.slice(0, 2).toUpperCase()}
@@ -360,7 +376,7 @@ export default function GroupsPage() {
                           className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
                         />
                         {mResults.length > 0 && (
-                          <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-gray-200 shadow-lg z-10">
+                          <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-gray-200 shadow-lg z-10 max-h-48 overflow-y-auto">
                             {mResults.map((p) => (
                               <button
                                 key={p.id}
@@ -409,7 +425,7 @@ export default function GroupsPage() {
             Friends · {friends.length}
           </p>
           <div className="space-y-2">
-            {friends.map((f) => (
+            {[...friends].sort((a, b) => a.display_name.localeCompare(b.display_name)).map((f) => (
               <div key={f.id} className="flex items-center gap-3 bg-white rounded-2xl border border-gray-100 px-4 py-3">
                 <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm flex-shrink-0">
                   {f.display_name.slice(0, 2).toUpperCase()}

@@ -82,6 +82,17 @@ export default function NewCheckInPage() {
   const [error, setError] = useState('');
 
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setShowResults(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     async function init() {
@@ -267,7 +278,7 @@ export default function NewCheckInPage() {
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-2">Location</label>
           {!showAddForm ? (
-            <div className="relative">
+            <div className="relative" ref={searchContainerRef}>
               <input
                 type="text"
                 value={buildingQuery}
