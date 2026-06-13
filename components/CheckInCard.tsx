@@ -173,7 +173,13 @@ export default function CheckInCard({
         <div className="flex items-baseline justify-between gap-2">
           <span className="font-semibold text-gray-900 truncate">{checkIn.profiles.display_name}</span>
           <span className="text-xs text-gray-400 flex-shrink-0">
-            {isUpcoming && until ? until : timeAgo(checkIn.created_at)}
+            {isUpcoming && until
+              ? until
+              : timeAgo(
+                  checkIn.starts_at && new Date(checkIn.starts_at) <= new Date()
+                    ? checkIn.starts_at
+                    : checkIn.created_at,
+                )}
           </span>
         </div>
         <p className="text-sm text-gray-600 truncate mt-0.5">
