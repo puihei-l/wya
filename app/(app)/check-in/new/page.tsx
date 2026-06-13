@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { Building, Group, Vibe } from '@/lib/types';
+import { useGPSCoords } from '@/hooks/useGPSCoords';
+import { haversineKm, GPS_SUGGESTIONS_KEY, GPS_CONTRIBUTE_KEY } from '@/lib/gps';
 
 const VIBES: { value: Vibe; img: string; label: string }[] = [
   { value: 'chilling',   img: '/vibes/1.png', label: 'Chilling' },
@@ -53,6 +55,12 @@ function isValidBuildingName(s: string): boolean {
 export default function NewCheckInPage() {
   const router = useRouter();
   const supabase = createClient();
+  const gpsCoords = useGPSCoords();
+
+  // Keep a ref so search closures always read the latest coords without
+  // triggering a re-search when GPS resolves mid-session.
+  const gpsCoordsRef = useRef(gpsCoords);
+  useEffect(() => { gpsCoordsRef.current = gpsCoords; }, [gpsCoords]);
 
   const [building, setBuilding] = useState<Building | null>(null);
   const [buildingQuery, setBuildingQuery] = useState('');
@@ -75,6 +83,10 @@ export default function NewCheckInPage() {
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
 
+  const [showGpsSettings, setShowGpsSettings] = useState(false);
+  const [gpsSuggestions, setGpsSuggestions] = useState(false);
+  const [gpsContribute, setGpsContribute] = useState(false);
+
   const [durationMs, setDurationMs] = useState(2 * 60 * 60 * 1000);
   const [clash, setClash] = useState<ClashingCheckIn | null>(null);
   const [pendingExpiresAt, setPendingExpiresAt] = useState<string | null>(null);
@@ -95,6 +107,40 @@ export default function NewCheckInPage() {
   }, []);
 
   useEffect(() => {
+    setGpsSuggestions(localStorage.getItem(GPS_SUGGESTIONS_KEY) === 'true');
+    setGpsContribute(localStorage.getItem(GPS_CONTRIBUTE_KEY) === 'true');
+  }, []);
+
+  async function toggleGpsSuggestions() {
+    if (gpsSuggestions) {
+      localStorage.setItem(GPS_SUGGESTIONS_KEY, 'false');
+      localStorage.setItem(GPS_CONTRIBUTE_KEY, 'false');
+      setGpsSuggestions(false);
+      setGpsContribute(false);
+      return;
+    }
+    if (!navigator.geolocation) return;
+    await new Promise<void>((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        () => {
+          localStorage.setItem(GPS_SUGGESTIONS_KEY, 'true');
+          setGpsSuggestions(true);
+          resolve();
+        },
+        () => resolve(),
+        { timeout: 10000 },
+      );
+    });
+  }
+
+  function toggleGpsContribute() {
+    if (!gpsSuggestions) return;
+    const next = !gpsContribute;
+    localStorage.setItem(GPS_CONTRIBUTE_KEY, String(next));
+    setGpsContribute(next);
+  }
+
+  useEffect(() => {
     async function init() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -111,12 +157,31 @@ export default function NewCheckInPage() {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     if (!buildingQuery.trim()) { setBuildingResults([]); return; }
     searchTimeout.current = setTimeout(async () => {
+      const coords = gpsCoordsRef.current;
+      // Fetch a larger pool when we have coords so we can sort and pick the 5 closest.
       const { data } = await supabase
         .from('buildings')
-        .select('id, name, address')
+        .select('id, name, address, lat, lng')
         .ilike('name', `%${buildingQuery.trim()}%`)
-        .limit(5);
-      setBuildingResults(data ?? []);
+        .limit(coords ? 30 : 5);
+
+      let results: Building[] = data ?? [];
+
+      if (coords) {
+        results = results
+          .filter((b) => {
+            if (b.lat == null || b.lng == null) return false;
+            return haversineKm(coords.lat, coords.lng, b.lat, b.lng) <= 0.1;
+          })
+          .sort((a, b) => {
+            const distA = haversineKm(coords.lat, coords.lng, a.lat!, a.lng!);
+            const distB = haversineKm(coords.lat, coords.lng, b.lat!, b.lng!);
+            return distA - distB;
+          })
+          .slice(0, 5);
+      }
+
+      setBuildingResults(results);
       setShowResults(true);
     }, 300);
   }, [buildingQuery, supabase]);
@@ -144,6 +209,14 @@ export default function NewCheckInPage() {
     const spotsArray = newSpots.trim()
       ? newSpots.split(',').map((s) => s.trim()).filter(Boolean)
       : null;
+
+    const isFutureCheckIn = startsAt && new Date(startsAt) > new Date();
+    const coords = gpsCoordsRef.current;
+    const shouldAddCoords =
+      !isFutureCheckIn &&
+      coords &&
+      localStorage.getItem(GPS_CONTRIBUTE_KEY) === 'true';
+
     const { data } = await supabase
       .from('buildings')
       .insert({
@@ -152,8 +225,9 @@ export default function NewCheckInPage() {
         num_floors: newFloors ? parseInt(newFloors, 10) : null,
         floor_label: newFloorLabel,
         notable_spots: spotsArray,
+        ...(shouldAddCoords ? { lat: coords!.lat, lng: coords!.lng } : {}),
       })
-      .select('id, name, address, num_floors, floor_label, notable_spots')
+      .select('id, name, address, num_floors, floor_label, notable_spots, lat, lng')
       .single();
     setAddingBuilding(false);
     if (data) {
@@ -178,6 +252,24 @@ export default function NewCheckInPage() {
         .from('check_ins')
         .update({ expires_at: newStartsAt })
         .eq('id', clash.id);
+    }
+
+    // Contribute GPS for existing buildings (newly-added ones already have coords set on insert).
+    const isFutureCheckIn = startsAt && new Date(startsAt) > new Date();
+    const coords = gpsCoordsRef.current;
+    if (
+      building &&
+      !isFutureCheckIn &&
+      coords &&
+      localStorage.getItem(GPS_CONTRIBUTE_KEY) === 'true'
+    ) {
+      const newLat = building.lat != null ? (building.lat + coords.lat) / 2 : coords.lat;
+      const newLng = building.lng != null ? (building.lng + coords.lng) / 2 : coords.lng;
+      // Fire-and-forget; don't block the check-in on a GPS update.
+      supabase
+        .from('buildings')
+        .update({ lat: newLat, lng: newLng })
+        .eq('id', building.id);
     }
 
     const { data: checkIn, error: ciErr } = await supabase
@@ -277,7 +369,7 @@ export default function NewCheckInPage() {
         {/* Building */}
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-2">Location</label>
-          {!showAddForm ? (
+          {!showAddForm && (
             <div className="relative" ref={searchContainerRef}>
               <input
                 type="text"
@@ -315,7 +407,61 @@ export default function NewCheckInPage() {
               )}
               {building && <p className="text-xs text-green-600 mt-1.5 ml-1">✓ {building.name}</p>}
             </div>
-          ) : (
+          )}
+
+          {!showAddForm && (
+            <div className="mt-2">
+              <button
+                type="button"
+                onClick={() => setShowGpsSettings((v) => !v)}
+                className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-500 transition-colors"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+                Location settings
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${showGpsSettings ? 'rotate-180' : ''}`}>
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+
+              {showGpsSettings && (
+                <div className="mt-2 space-y-2">
+                  <div className="flex items-start justify-between gap-4 px-3 py-2.5 bg-gray-50 rounded-xl">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-gray-700">Nearby suggestions</p>
+                      <p className="text-xs text-gray-400 mt-0.5">Rank buildings by distance. Stays on-device.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={toggleGpsSuggestions}
+                      className={`relative flex-shrink-0 w-9 h-5 rounded-full transition-colors ${gpsSuggestions ? 'bg-indigo-600' : 'bg-gray-200'}`}
+                    >
+                      <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${gpsSuggestions ? 'translate-x-4' : 'translate-x-0'}`} />
+                    </button>
+                  </div>
+
+                  <div className={`flex items-start justify-between gap-4 px-3 py-2.5 bg-gray-50 rounded-xl transition-opacity ${!gpsSuggestions ? 'opacity-50' : ''}`}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-gray-700">Improve location data</p>
+                      <p className="text-xs text-gray-400 mt-0.5">Share coordinates when checking in to help pin buildings.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={toggleGpsContribute}
+                      disabled={!gpsSuggestions}
+                      className={`relative flex-shrink-0 w-9 h-5 rounded-full transition-colors ${gpsContribute ? 'bg-indigo-600' : 'bg-gray-200'} disabled:cursor-not-allowed`}
+                    >
+                      <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${gpsContribute ? 'translate-x-4' : 'translate-x-0'}`} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {showAddForm && (
             <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-gray-700">Add new place</p>

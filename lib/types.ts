@@ -13,6 +13,8 @@ export interface Building {
   num_floors?: number | null;
   floor_label?: string | null;
   notable_spots?: string[] | null;
+  lat?: number | null;
+  lng?: number | null;
 }
 
 export type Vibe = 'studying' | 'chilling' | 'eating' | 'working' | 'gaming' | 'exercising';
