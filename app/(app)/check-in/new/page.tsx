@@ -72,6 +72,7 @@ export default function NewCheckInPage() {
   const [newFloors, setNewFloors] = useState('');
   const [newFloorLabel, setNewFloorLabel] = useState('Floor');
   const [newSpots, setNewSpots] = useState('');
+  const [newPinGps, setNewPinGps] = useState(false);
   const [addingBuilding, setAddingBuilding] = useState(false);
 
   const [floor, setFloor] = useState('');
@@ -208,6 +209,7 @@ export default function NewCheckInPage() {
     setNewFloors('');
     setNewFloorLabel('Floor');
     setNewSpots('');
+    setNewPinGps(gpsSuggestions && gpsCoordsRef.current !== null);
     setShowResults(false);
     setShowAddForm(true);
   }
@@ -221,12 +223,7 @@ export default function NewCheckInPage() {
       ? newSpots.split(',').map((s) => s.trim()).filter(Boolean)
       : null;
 
-    const isFutureCheckIn = startsAt && new Date(startsAt) > new Date();
     const coords = gpsCoordsRef.current;
-    const shouldAddCoords =
-      !isFutureCheckIn &&
-      coords &&
-      localStorage.getItem(GPS_CONTRIBUTE_KEY) === 'true';
 
     const { data } = await supabase
       .from('buildings')
@@ -236,7 +233,7 @@ export default function NewCheckInPage() {
         num_floors: newFloors ? parseInt(newFloors, 10) : null,
         floor_label: newFloorLabel,
         notable_spots: spotsArray,
-        ...(shouldAddCoords ? { lat: coords!.lat, lng: coords!.lng } : {}),
+        ...(newPinGps && coords ? { lat: coords.lat, lng: coords.lng } : {}),
       })
       .select('id, name, address, num_floors, floor_label, notable_spots, lat, lng')
       .single();
@@ -496,6 +493,22 @@ export default function NewCheckInPage() {
                   className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
                 />
               </div>
+
+              {gpsSuggestions && gpsCoordsRef.current && (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-gray-700">Pin to current location</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Save your GPS coordinates with this place.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setNewPinGps((v) => !v)}
+                    className={`relative flex-shrink-0 w-9 h-5 rounded-full transition-colors ${newPinGps ? 'bg-indigo-600' : 'bg-gray-200'}`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${newPinGps ? 'translate-x-4' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+              )}
 
               <button
                 type="button"
