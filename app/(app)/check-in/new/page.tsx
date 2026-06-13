@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { Building, Group, Vibe } from '@/lib/types';
@@ -140,6 +140,28 @@ export default function NewCheckInPage() {
     setGpsContribute(next);
   }
 
+  const fetchNearby = useCallback(async (): Promise<Building[]> => {
+    const coords = gpsCoordsRef.current;
+    if (!coords) return [];
+    const { data } = await supabase
+      .from('buildings')
+      .select('id, name, address, lat, lng')
+      .not('lat', 'is', null)
+      .not('lng', 'is', null)
+      .limit(50);
+    return (data ?? [])
+      .filter((b) => b.lat != null && b.lng != null && haversineKm(coords.lat, coords.lng, b.lat, b.lng) <= 0.1)
+      .sort((a, b) => haversineKm(coords.lat, coords.lng, a.lat!, a.lng!) - haversineKm(coords.lat, coords.lng, b.lat!, b.lng!))
+      .slice(0, 5);
+  }, [supabase]);
+
+  // Pre-populate nearby results as soon as GPS resolves (if the query is still empty).
+  useEffect(() => {
+    if (!gpsCoords || buildingQuery.trim()) return;
+    fetchNearby().then(setBuildingResults);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gpsCoords]);
+
   useEffect(() => {
     async function init() {
       const { data: { user } } = await supabase.auth.getUser();
@@ -155,36 +177,25 @@ export default function NewCheckInPage() {
 
   useEffect(() => {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
-    if (!buildingQuery.trim()) { setBuildingResults([]); return; }
+    if (!buildingQuery.trim()) {
+      // Query cleared — switch back to nearby list (or close if GPS unavailable).
+      fetchNearby().then((results) => {
+        setBuildingResults(results);
+        if (results.length === 0) setShowResults(false);
+      });
+      return;
+    }
+    // Typing — plain string match, no GPS filtering.
     searchTimeout.current = setTimeout(async () => {
-      const coords = gpsCoordsRef.current;
-      // Fetch a larger pool when we have coords so we can sort and pick the 5 closest.
       const { data } = await supabase
         .from('buildings')
         .select('id, name, address, lat, lng')
         .ilike('name', `%${buildingQuery.trim()}%`)
-        .limit(coords ? 30 : 5);
-
-      let results: Building[] = data ?? [];
-
-      if (coords) {
-        results = results
-          .filter((b) => {
-            if (b.lat == null || b.lng == null) return false;
-            return haversineKm(coords.lat, coords.lng, b.lat, b.lng) <= 0.1;
-          })
-          .sort((a, b) => {
-            const distA = haversineKm(coords.lat, coords.lng, a.lat!, a.lng!);
-            const distB = haversineKm(coords.lat, coords.lng, b.lat!, b.lng!);
-            return distA - distB;
-          })
-          .slice(0, 5);
-      }
-
-      setBuildingResults(results);
+        .limit(5);
+      setBuildingResults(data ?? []);
       setShowResults(true);
     }, 300);
-  }, [buildingQuery, supabase]);
+  }, [buildingQuery, supabase, fetchNearby]);
 
   function selectBuilding(b: Building) {
     setBuilding(b);
@@ -375,7 +386,15 @@ export default function NewCheckInPage() {
                 type="text"
                 value={buildingQuery}
                 onChange={(e) => { setBuildingQuery(e.target.value); setBuilding(null); }}
-                onFocus={() => buildingResults.length > 0 && setShowResults(true)}
+                onFocus={async () => {
+                  if (buildingResults.length > 0) {
+                    setShowResults(true);
+                  } else if (!buildingQuery.trim()) {
+                    const results = await fetchNearby();
+                    setBuildingResults(results);
+                    if (results.length > 0) setShowResults(true);
+                  }
+                }}
                 placeholder="Search for a place…"
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base bg-white"
                 autoComplete="off"
