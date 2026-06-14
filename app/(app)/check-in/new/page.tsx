@@ -271,13 +271,15 @@ export default function NewCheckInPage() {
       coords &&
       localStorage.getItem(GPS_CONTRIBUTE_KEY) === 'true'
     ) {
-      const newLat = building.lat != null ? (building.lat + coords.lat) / 2 : coords.lat;
-      const newLng = building.lng != null ? (building.lng + coords.lng) / 2 : coords.lng;
-      // Fire-and-forget; don't block the check-in on a GPS update.
+      // Fire-and-forget. Averaging happens atomically in the SECURITY DEFINER function
+      // since buildings has no direct UPDATE policy.
       supabase
-        .from('buildings')
-        .update({ lat: newLat, lng: newLng })
-        .eq('id', building.id);
+        .rpc('contribute_building_location', {
+          p_building_id: building.id,
+          p_lat: coords.lat,
+          p_lng: coords.lng,
+        })
+        .then(() => {});
     }
 
     const { data: checkIn, error: ciErr } = await supabase

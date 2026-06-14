@@ -38,6 +38,9 @@ export default function GroupsPage() {
   const incomingPending = requests.filter(
     (r) => r.to_id === currentUserId && r.status === 'pending'
   );
+  const outgoingPending = requests.filter(
+    (r) => r.from_id === currentUserId && r.status === 'pending'
+  );
   const friends: Profile[] = requests
     .filter((r) => r.status === 'accepted')
     .map((r) => (r.from_id === currentUserId ? r.to_profile : r.from_profile));
@@ -114,12 +117,31 @@ export default function GroupsPage() {
          to_profile:to_id (id, username, display_name, avatar_url)`
       )
       .single();
-    if (data) setRequests((prev) => [...prev, data as unknown as FriendRequest]);
+    if (data) {
+      setRequests((prev) => [...prev, data as unknown as FriendRequest]);
+      fetch('/api/notify-friend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId: data.id, type: 'request' }),
+      });
+    }
   }
 
   async function respondToRequest(requestId: string, status: 'accepted' | 'declined') {
     await supabase.from('friend_requests').update({ status }).eq('id', requestId);
     setRequests((prev) => prev.map((r) => (r.id === requestId ? { ...r, status } : r)));
+    if (status === 'accepted') {
+      fetch('/api/notify-friend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId, type: 'accepted' }),
+      });
+    }
+  }
+
+  async function cancelRequest(requestId: string) {
+    await supabase.from('friend_requests').delete().eq('id', requestId);
+    setRequests((prev) => prev.filter((r) => r.id !== requestId));
   }
 
   function memberResults(groupId: string): Profile[] {
@@ -209,6 +231,37 @@ export default function GroupsPage() {
                     Decline
                   </button>
                 </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Outgoing pending requests */}
+      {outgoingPending.length > 0 && (
+        <div className="mb-6">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+            Sent · {outgoingPending.length}
+          </p>
+          <div className="space-y-2">
+            {outgoingPending.map((req) => (
+              <div
+                key={req.id}
+                className="flex items-center gap-3 bg-white rounded-2xl border border-gray-100 px-4 py-3"
+              >
+                <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 font-bold text-sm flex-shrink-0">
+                  {req.to_profile.display_name.slice(0, 2).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-900">{req.to_profile.display_name}</p>
+                  <p className="text-xs text-gray-400">@{req.to_profile.username}</p>
+                </div>
+                <button
+                  onClick={() => cancelRequest(req.id)}
+                  className="text-xs px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg font-semibold flex-shrink-0"
+                >
+                  Cancel
+                </button>
               </div>
             ))}
           </div>
@@ -425,17 +478,31 @@ export default function GroupsPage() {
             Friends · {friends.length}
           </p>
           <div className="space-y-2">
-            {[...friends].sort((a, b) => a.display_name.localeCompare(b.display_name)).map((f) => (
-              <div key={f.id} className="flex items-center gap-3 bg-white rounded-2xl border border-gray-100 px-4 py-3">
-                <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm flex-shrink-0">
-                  {f.display_name.slice(0, 2).toUpperCase()}
+            {[...friends].sort((a, b) => a.display_name.localeCompare(b.display_name)).map((f) => {
+              const memberOf = groups.filter((g) =>
+                g.friend_group_members.some((m) => m.user_id === f.id)
+              );
+              return (
+                <div key={f.id} className="flex items-center gap-3 bg-white rounded-2xl border border-gray-100 px-4 py-3">
+                  <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm flex-shrink-0">
+                    {f.display_name.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-900">{f.display_name}</p>
+                    <p className="text-xs text-gray-400">@{f.username}</p>
+                    {memberOf.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {memberOf.map((g) => (
+                          <span key={g.id} className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-gray-100 rounded-full text-xs text-gray-500">
+                            {g.emoji} {g.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-900">{f.display_name}</p>
-                  <p className="text-xs text-gray-400">@{f.username}</p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
