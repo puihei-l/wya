@@ -13,25 +13,15 @@ export function useGPSCoords(): Coords | null {
     if (typeof window === 'undefined') return;
     if (localStorage.getItem(GPS_SUGGESTIONS_KEY) !== 'true') return;
     if (!navigator.geolocation) return;
-
-    const doGet = () =>
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          _cache = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          setCoords(_cache);
-        },
-        () => {},
-        { timeout: 10000, maximumAge: 300000 },
-      );
-
-    // Only silently fetch if permission is already granted — never re-prompt here.
-    if (navigator.permissions) {
-      navigator.permissions.query({ name: 'geolocation' }).then((result) => {
-        if (result.state === 'granted') doGet();
-      });
-    } else {
-      doGet();
-    }
+    if (_cache) { setCoords(_cache); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        _cache = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setCoords(_cache);
+      },
+      () => {},
+      { timeout: 10000, maximumAge: 300000 },
+    );
   }, []);
 
   useEffect(() => {
