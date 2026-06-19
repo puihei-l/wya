@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { Building, Group, Vibe } from '@/lib/types';
 import { useGPSCoords } from '@/hooks/useGPSCoords';
@@ -54,7 +54,6 @@ function isValidBuildingName(s: string): boolean {
 
 export default function NewCheckInPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const supabase = createClient();
   const gpsCoords = useGPSCoords();
 
@@ -207,7 +206,7 @@ export default function NewCheckInPage() {
 
   // Pre-fill building from URL param (e.g. tapped suggestion banner on home page).
   useEffect(() => {
-    const buildingId = searchParams.get('buildingId');
+    const buildingId = new URLSearchParams(window.location.search).get('buildingId');
     if (!buildingId) return;
     supabase
       .from('buildings')
