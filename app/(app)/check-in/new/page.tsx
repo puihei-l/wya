@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { Building, Group, Vibe } from '@/lib/types';
 import { useGPSCoords } from '@/hooks/useGPSCoords';
@@ -54,6 +54,7 @@ function isValidBuildingName(s: string): boolean {
 
 export default function NewCheckInPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
   const gpsCoords = useGPSCoords();
 
@@ -76,11 +77,11 @@ export default function NewCheckInPage() {
   const [addingBuilding, setAddingBuilding] = useState(false);
 
   const [floor, setFloor] = useState('');
-  const [vibe, setVibe] = useState<Vibe | ''>('');
+  const [vibe, setVibe] = useState<Vibe | ''>('chilling');
   const [isOpen, setIsOpen] = useState(true);
   const [note, setNote] = useState('');
   const [startsAt, setStartsAt] = useState('');
-  const [shareAll, setShareAll] = useState(false);
+  const [shareAll, setShareAll] = useState(true);
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
 
@@ -203,6 +204,19 @@ export default function NewCheckInPage() {
     setBuildingQuery(b.name);
     setShowResults(false);
   }
+
+  // Pre-fill building from URL param (e.g. tapped suggestion banner on home page).
+  useEffect(() => {
+    const buildingId = searchParams.get('buildingId');
+    if (!buildingId) return;
+    supabase
+      .from('buildings')
+      .select('id, name, address, lat, lng')
+      .eq('id', buildingId)
+      .single()
+      .then(({ data }) => { if (data) selectBuilding(data as Building); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function openAddForm() {
     setNewName(buildingQuery.trim());

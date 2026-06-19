@@ -1,10 +1,13 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import CheckInCard from '@/components/CheckInCard';
 import PushSetup from '@/components/PushSetup';
-import type { CheckIn } from '@/lib/types';
+import { useGPSCoords } from '@/hooks/useGPSCoords';
+import { haversineKm, GPS_SUGGESTIONS_KEY } from '@/lib/gps';
+import type { CheckIn, Building } from '@/lib/types';
 
 export default function HomePage() {
   const [active, setActive] = useState<CheckIn[]>([]);
@@ -12,6 +15,29 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState('');
   const fetchAllRef = useRef<() => void>(() => {});
+
+  const gpsCoords = useGPSCoords();
+  const [nearbyBuilding, setNearbyBuilding] = useState<Building | null>(null);
+  const [suggestionDismissed, setSuggestionDismissed] = useState(false);
+
+  useEffect(() => {
+    if (!gpsCoords) return;
+    if (typeof window !== 'undefined' && localStorage.getItem(GPS_SUGGESTIONS_KEY) !== 'true') return;
+    const supabase = createClient();
+    supabase
+      .from('buildings')
+      .select('id, name, address, lat, lng')
+      .not('lat', 'is', null)
+      .not('lng', 'is', null)
+      .limit(50)
+      .then(({ data }) => {
+        const sorted = (data ?? [])
+          .filter((b) => b.lat != null && b.lng != null && haversineKm(gpsCoords.lat, gpsCoords.lng, b.lat, b.lng) <= 0.1)
+          .sort((a, b) => haversineKm(gpsCoords.lat, gpsCoords.lng, a.lat!, a.lng!) - haversineKm(gpsCoords.lat, gpsCoords.lng, b.lat!, b.lng!));
+        setNearbyBuilding((sorted[0] as Building) ?? null);
+        setSuggestionDismissed(false);
+      });
+  }, [gpsCoords]);
 
   const buildFeed = useCallback((checkIns: CheckIn[]) => {
     const now = new Date();
@@ -80,6 +106,28 @@ export default function HomePage() {
   return (
     <div className="max-w-lg mx-auto px-4 pt-6">
       <PushSetup />
+
+      {nearbyBuilding && !suggestionDismissed && (
+        <div className="flex items-center gap-3 bg-indigo-50 border border-indigo-100 rounded-2xl px-4 py-3 mb-4">
+          <Link
+            href={`/check-in/new?buildingId=${nearbyBuilding.id}`}
+            className="flex-1 flex items-center gap-3 min-w-0"
+          >
+            <span className="text-xl">📍</span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-indigo-900 truncate">{nearbyBuilding.name}</p>
+              <p className="text-xs text-indigo-500">You&apos;re nearby — check in?</p>
+            </div>
+          </Link>
+          <button
+            onClick={() => setSuggestionDismissed(true)}
+            className="text-indigo-300 hover:text-indigo-500 text-lg leading-none flex-shrink-0"
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-2xl font-black text-gray-900 tracking-tight">wya</h1>
