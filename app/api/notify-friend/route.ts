@@ -24,25 +24,25 @@ export async function POST(request: Request) {
 
   const { data: req } = await admin
     .from('friend_requests')
-    .select(
-      `id, from_id, to_id,
-       from_profile:from_id (display_name),
-       to_profile:to_id (display_name)`
-    )
+    .select('id, from_id, to_id')
     .eq('id', requestId)
     .single();
 
   if (!req) return Response.json({ error: 'Not found' }, { status: 404 });
 
-  const fromProfile = (req as any).from_profile;
-  const toProfile = (req as any).to_profile;
-
-  // Notify the recipient of a new request, or the sender when it's accepted.
   const notifyUserId = type === 'request' ? req.to_id : req.from_id;
+  const nameSourceId = type === 'request' ? req.from_id : req.to_id;
+
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('display_name')
+    .eq('id', nameSourceId)
+    .single();
+
   const title =
     type === 'request'
-      ? `${fromProfile.display_name} sent you a friend request`
-      : `${toProfile.display_name} accepted your friend request`;
+      ? `${profile?.display_name ?? 'Someone'} sent you a friend request`
+      : `${profile?.display_name ?? 'Someone'} accepted your friend request`;
 
   const { data: subs } = await admin
     .from('push_subscriptions')

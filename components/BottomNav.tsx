@@ -44,7 +44,20 @@ export default function BottomNav() {
                 href={tab.href}
                 className="flex items-center justify-center w-14 h-14 bg-indigo-600 rounded-full shadow-lg -mt-5 active:scale-95 transition-transform"
               >
-                <img src={tab.img} alt={tab.label} className="w-7 h-7 object-contain" />
+                <span
+                  aria-label={tab.label}
+                  className="w-7 h-7 bg-white"
+                  style={{
+                    maskImage: 'url(/2.png)',
+                    maskSize: 'contain',
+                    maskRepeat: 'no-repeat',
+                    maskPosition: 'center',
+                    WebkitMaskImage: 'url(/2.png)',
+                    WebkitMaskSize: 'contain',
+                    WebkitMaskRepeat: 'no-repeat',
+                    WebkitMaskPosition: 'center',
+                  }}
+                />
               </Link>
             );
           }
