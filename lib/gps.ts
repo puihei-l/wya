@@ -1,6 +1,21 @@
 export const GPS_SUGGESTIONS_KEY = 'gps_suggestions';
 export const GPS_CONTRIBUTE_KEY = 'gps_contribute';
 
+const GENERIC_NAMES = new Set([
+  'home', 'house', 'my house', 'my home',
+  'work', 'office', 'my office',
+  'uni', 'university', 'college', 'school',
+  'gym',
+  'church', 'mosque', 'temple', 'synagogue',
+  'hospital', 'clinic',
+  'airport',
+  'hotel',
+]);
+
+export function isGenericBuildingName(name: string): boolean {
+  return GENERIC_NAMES.has(name.trim().toLowerCase());
+}
+
 export type Coords = { lat: number; lng: number };
 
 export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {

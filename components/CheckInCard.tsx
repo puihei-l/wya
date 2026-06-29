@@ -1,8 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { createClient } from '@/lib/supabase/client';
+import { isGenericBuildingName } from '@/lib/gps';
 import type { CheckIn, Vibe, Group } from '@/lib/types';
+
+const MapView = dynamic(() => import('@/components/MapView'), { ssr: false });
 
 const VIBE: Record<string, { img: string; label: string; bg: string; text: string }> = {
   chilling:   { img: '/vibes/1.png', label: 'Chilling',   bg: 'bg-green-100',  text: 'text-green-700' },
@@ -99,6 +103,7 @@ export default function CheckInCard({
     isIndefinite(checkIn.expires_at) ? INDEFINITE : 2 * 60 * 60 * 1000
   );
   const [saving, setSaving] = useState(false);
+  const [arrivalConfirmed, setArrivalConfirmed] = useState(false);
   const [editGroups, setEditGroups] = useState<Group[]>([]);
   const [editSelectedGroups, setEditSelectedGroups] = useState<string[]>([]);
   const [editShareAll, setEditShareAll] = useState(false);
@@ -107,6 +112,34 @@ export default function CheckInCard({
   const vibeInfo = VIBE[checkIn.vibe] ?? VIBE.chilling;
   const left = timeLeft(checkIn.expires_at);
   const until = checkIn.starts_at ? timeUntil(checkIn.starts_at) : null;
+
+  // Show arrival prompt if: owner, check-in just became active, has a planned pin and a building.
+  const needsArrivalConfirm =
+    isOwner &&
+    !isUpcoming &&
+    !arrivalConfirmed &&
+    checkIn.planned_lat != null &&
+    checkIn.planned_lng != null &&
+    checkIn.buildings != null &&
+    !isGenericBuildingName(checkIn.buildings.name) &&
+    checkIn.starts_at != null &&
+    Date.now() - new Date(checkIn.starts_at).getTime() < 4 * 60 * 60 * 1000;
+
+  function confirmArrival() {
+    setArrivalConfirmed(true);
+    navigator.geolocation?.getCurrentPosition(
+      (pos) => {
+        const supabase = createClient();
+        supabase.rpc('contribute_building_location', {
+          p_building_id: checkIn.buildings!.id,
+          p_lat: pos.coords.latitude,
+          p_lng: pos.coords.longitude,
+        }).then(() => {});
+      },
+      () => {},
+      { timeout: 10000 },
+    );
+  }
 
   async function openEdit() {
     setIsEditing(true);
@@ -167,6 +200,7 @@ export default function CheckInCard({
   const editingStartsAtIsFuture = startsAt && new Date(startsAt) > new Date();
 
   const cardBody = (
+    <>
     <div className="flex gap-3">
       <Avatar name={checkIn.profiles.display_name} />
       <div className="flex-1 min-w-0">
@@ -217,6 +251,29 @@ export default function CheckInCard({
         )}
       </div>
     </div>
+    {checkIn.planned_lat != null && checkIn.planned_lng != null && (
+      <div className="mt-3">
+        <MapView
+          lat={checkIn.planned_lat}
+          lng={checkIn.planned_lng}
+          initLat={checkIn.planned_lat}
+          initLng={checkIn.planned_lng}
+          height="128px"
+        />
+      </div>
+    )}
+    {needsArrivalConfirm && (
+      <div className="mt-3 flex items-center justify-between gap-3 bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2.5">
+        <p className="text-xs text-indigo-700 font-medium">You&apos;re here now?</p>
+        <button
+          onClick={confirmArrival}
+          className="text-xs font-semibold bg-indigo-600 text-white px-3 py-1.5 rounded-lg flex-shrink-0"
+        >
+          Confirm location
+        </button>
+      </div>
+    )}
+    </>
   );
 
   if (!isOwner) {

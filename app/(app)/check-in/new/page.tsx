@@ -2,10 +2,13 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { createClient } from '@/lib/supabase/client';
 import type { Building, Group, Vibe } from '@/lib/types';
 import { useGPSCoords } from '@/hooks/useGPSCoords';
-import { haversineKm, GPS_SUGGESTIONS_KEY, GPS_CONTRIBUTE_KEY } from '@/lib/gps';
+import { haversineKm, GPS_SUGGESTIONS_KEY, GPS_CONTRIBUTE_KEY, isGenericBuildingName } from '@/lib/gps';
+
+const MapView = dynamic(() => import('@/components/MapView'), { ssr: false });
 
 const VIBES: { value: Vibe; img: string; label: string }[] = [
   { value: 'chilling',   img: '/vibes/1.png', label: 'Chilling' },
@@ -87,6 +90,12 @@ export default function NewCheckInPage() {
   const [showGpsSettings, setShowGpsSettings] = useState(false);
   const [gpsSuggestions, setGpsSuggestions] = useState(false);
   const [gpsContribute, setGpsContribute] = useState(false);
+
+  const [plannedLat, setPlannedLat] = useState<number | null>(null);
+  const [plannedLng, setPlannedLng] = useState<number | null>(null);
+  // Resolved once we have a GPS fix or a building with known coords.
+  const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
+  const [mapIsDefault, setMapIsDefault] = useState(false);
 
   const [durationMs, setDurationMs] = useState(2 * 60 * 60 * 1000);
   const [clash, setClash] = useState<ClashingCheckIn | null>(null);
@@ -204,6 +213,23 @@ export default function NewCheckInPage() {
     setShowResults(false);
   }
 
+  // Resolve map center from GPS or selected building coords.
+  useEffect(() => {
+    if (mapCenter) return;
+    if (gpsCoords) { setMapCenter([gpsCoords.lat, gpsCoords.lng]); return; }
+    if (building?.lat != null && building?.lng != null) {
+      setMapCenter([building.lat, building.lng]);
+    }
+  }, [gpsCoords, building, mapCenter]);
+
+  // Fallback: show the map after 5s even without a known location.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setMapCenter((c) => { if (c) return c; setMapIsDefault(true); return [-37.8136, 144.9631]; });
+    }, 5000);
+    return () => clearTimeout(t);
+  }, []);
+
   // Pre-fill building from URL param (e.g. tapped suggestion banner on home page).
   useEffect(() => {
     const buildingId = new URLSearchParams(window.location.search).get('buildingId');
@@ -282,7 +308,8 @@ export default function NewCheckInPage() {
       building &&
       !isFutureCheckIn &&
       coords &&
-      localStorage.getItem(GPS_CONTRIBUTE_KEY) === 'true'
+      localStorage.getItem(GPS_CONTRIBUTE_KEY) === 'true' &&
+      !isGenericBuildingName(building.name)
     ) {
       // Fire-and-forget. Averaging happens atomically in the SECURITY DEFINER function
       // since buildings has no direct UPDATE policy.
@@ -307,6 +334,8 @@ export default function NewCheckInPage() {
         note: note.trim() || null,
         starts_at: startsAt ? new Date(startsAt).toISOString() : null,
         expires_at: expiresAt,
+        planned_lat: plannedLat,
+        planned_lng: plannedLng,
       })
       .select('id')
       .single();
@@ -602,6 +631,53 @@ export default function NewCheckInPage() {
             maxLength={100}
             className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base bg-white"
           />
+        </div>
+
+        {/* Pin location */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-sm font-semibold text-gray-700">
+              Pin location <span className="font-normal text-gray-400">(optional)</span>
+            </label>
+            {plannedLat != null && (
+              <button
+                type="button"
+                onClick={() => { setPlannedLat(null); setPlannedLng(null); }}
+                className="text-xs text-gray-400 hover:text-red-400"
+              >
+                Clear pin
+              </button>
+            )}
+          </div>
+          {mapCenter ? (
+            <div className="space-y-1.5">
+              <MapView
+                lat={plannedLat}
+                lng={plannedLng}
+                initLat={mapCenter[0]}
+                initLng={mapCenter[1]}
+                initZoom={mapIsDefault ? 11 : 16}
+                onPick={(lat, lng) => { setPlannedLat(lat); setPlannedLng(lng); }}
+                height="192px"
+              />
+              <p className="text-xs text-gray-400 text-center">
+                {plannedLat != null ? '📍 Pin placed — tap map to move it' : 'Tap the map to drop a pin'}
+              </p>
+              {gpsCoords && (
+                <button
+                  type="button"
+                  onClick={() => { setPlannedLat(gpsCoords.lat); setPlannedLng(gpsCoords.lng); }}
+                  className="text-xs text-indigo-600 font-medium"
+                >
+                  Use my current location
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="h-48 flex items-center justify-center bg-gray-50 rounded-xl">
+              <p className="text-sm text-gray-400">Getting your location…</p>
+            </div>
+          )}
         </div>
 
         {/* Start time */}

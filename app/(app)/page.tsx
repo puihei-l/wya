@@ -62,7 +62,7 @@ export default function HomePage() {
       const { data: checkIns } = await supabase
         .from('check_ins')
         .select(
-          `id, user_id, floor, vibe, is_open, note, starts_at, expires_at, created_at, custom_location,
+          `id, user_id, floor, vibe, is_open, note, starts_at, expires_at, created_at, custom_location, planned_lat, planned_lng,
            profiles:user_id (id, username, display_name, avatar_url),
            buildings:building_id (id, name, address)`
         )
@@ -107,7 +107,7 @@ export default function HomePage() {
     <div className="max-w-lg mx-auto px-4 pt-6">
       <PushSetup />
 
-      {nearbyBuilding && !suggestionDismissed && (
+      {nearbyBuilding && !suggestionDismissed && !active.some((c) => c.user_id === currentUserId) && (
         <div className="flex items-center gap-3 bg-indigo-50 border border-indigo-100 rounded-2xl px-4 py-3 mb-4">
           <Link
             href={`/check-in/new?buildingId=${nearbyBuilding.id}`}

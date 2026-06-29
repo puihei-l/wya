@@ -30,6 +30,8 @@ export interface CheckIn {
   expires_at: string;
   created_at: string;
   custom_location: string | null;
+  planned_lat: number | null;
+  planned_lng: number | null;
   profiles: Profile;
   buildings: Building | null;
 }
