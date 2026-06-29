@@ -96,7 +96,7 @@ export default function NewCheckInPage() {
   // Resolved once we have a GPS fix or a building with known coords.
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
   const [mapIsDefault, setMapIsDefault] = useState(false);
-  const [mapFlyTo, setMapFlyTo] = useState<{ lat: number; lng: number } | undefined>();
+  const [mapFlyTo, setMapFlyTo] = useState<{ lat: number; lng: number; t: number } | undefined>();
 
   const [durationMs, setDurationMs] = useState(2 * 60 * 60 * 1000);
   const [clash, setClash] = useState<ClashingCheckIn | null>(null);
@@ -671,7 +671,7 @@ export default function NewCheckInPage() {
                   onClick={() => {
                     setPlannedLat(gpsCoords.lat);
                     setPlannedLng(gpsCoords.lng);
-                    setMapFlyTo({ lat: gpsCoords.lat, lng: gpsCoords.lng });
+                    setMapFlyTo({ lat: gpsCoords.lat, lng: gpsCoords.lng, t: Date.now() });
                   }}
                   className="text-xs text-indigo-600 font-medium"
                 >

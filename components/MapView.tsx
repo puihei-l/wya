@@ -32,8 +32,8 @@ interface MapViewProps {
   initLat: number;
   initLng: number;
   initZoom?: number;
-  /** When set, flies the map to these coords (use a new object reference to trigger) */
-  flyTo?: { lat: number; lng: number };
+  /** When set, flies the map to these coords. Include a unique `t` each call to re-trigger. */
+  flyTo?: { lat: number; lng: number; t: number };
   /** Omit for read-only display */
   onPick?: (lat: number, lng: number) => void;
   height?: string;
@@ -66,7 +66,7 @@ export default function MapView({
     >
       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
       {interactive && onPick && <ClickLayer onPick={onPick} />}
-      {flyTo && <FlyTo lat={flyTo.lat} lng={flyTo.lng} />}
+      {flyTo && <FlyTo key={flyTo.t} lat={flyTo.lat} lng={flyTo.lng} />}
       {lat != null && lng != null && <Marker position={[lat, lng]} icon={PIN} />}
     </MapContainer>
   );
