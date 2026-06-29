@@ -1,6 +1,7 @@
 'use client';
 
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import { useEffect } from 'react';
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -17,6 +18,12 @@ function ClickLayer({ onPick }: { onPick: (lat: number, lng: number) => void }) 
   return null;
 }
 
+function FlyTo({ lat, lng }: { lat: number; lng: number }) {
+  const map = useMap();
+  useEffect(() => { map.flyTo([lat, lng], 16, { animate: true, duration: 0.6 }); }, [lat, lng, map]);
+  return null;
+}
+
 interface MapViewProps {
   /** Current pin position */
   lat: number | null;
@@ -25,6 +32,8 @@ interface MapViewProps {
   initLat: number;
   initLng: number;
   initZoom?: number;
+  /** When set, flies the map to these coords (use a new object reference to trigger) */
+  flyTo?: { lat: number; lng: number };
   /** Omit for read-only display */
   onPick?: (lat: number, lng: number) => void;
   height?: string;
@@ -36,6 +45,7 @@ export default function MapView({
   initLat,
   initLng,
   initZoom = 16,
+  flyTo,
   onPick,
   height = '200px',
 }: MapViewProps) {
@@ -56,6 +66,7 @@ export default function MapView({
     >
       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
       {interactive && onPick && <ClickLayer onPick={onPick} />}
+      {flyTo && <FlyTo lat={flyTo.lat} lng={flyTo.lng} />}
       {lat != null && lng != null && <Marker position={[lat, lng]} icon={PIN} />}
     </MapContainer>
   );

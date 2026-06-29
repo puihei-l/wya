@@ -96,6 +96,7 @@ export default function NewCheckInPage() {
   // Resolved once we have a GPS fix or a building with known coords.
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
   const [mapIsDefault, setMapIsDefault] = useState(false);
+  const [mapFlyTo, setMapFlyTo] = useState<{ lat: number; lng: number } | undefined>();
 
   const [durationMs, setDurationMs] = useState(2 * 60 * 60 * 1000);
   const [clash, setClash] = useState<ClashingCheckIn | null>(null);
@@ -657,6 +658,7 @@ export default function NewCheckInPage() {
                 initLat={mapCenter[0]}
                 initLng={mapCenter[1]}
                 initZoom={mapIsDefault ? 11 : 16}
+                flyTo={mapFlyTo}
                 onPick={(lat, lng) => { setPlannedLat(lat); setPlannedLng(lng); }}
                 height="192px"
               />
@@ -666,7 +668,11 @@ export default function NewCheckInPage() {
               {gpsCoords && (
                 <button
                   type="button"
-                  onClick={() => { setPlannedLat(gpsCoords.lat); setPlannedLng(gpsCoords.lng); }}
+                  onClick={() => {
+                    setPlannedLat(gpsCoords.lat);
+                    setPlannedLng(gpsCoords.lng);
+                    setMapFlyTo({ lat: gpsCoords.lat, lng: gpsCoords.lng });
+                  }}
                   className="text-xs text-indigo-600 font-medium"
                 >
                   Use my current location
