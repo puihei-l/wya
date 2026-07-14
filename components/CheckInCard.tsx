@@ -126,9 +126,12 @@ export default function CheckInCard({
   const isParticipant = (checkIn.check_in_participants ?? []).some(
     (p) => p.user_id === currentUserId,
   );
+  const participantCount = (checkIn.check_in_participants ?? []).length;
   const allPeople = [
     checkIn.profiles,
-    ...(checkIn.check_in_participants ?? []).map((p) => p.profiles),
+    ...(checkIn.check_in_participants ?? [])
+      .map((p) => p.profiles)
+      .filter((p): p is import('@/lib/types').Profile => p != null),
   ];
 
   async function joinCheckIn() {
@@ -253,9 +256,9 @@ export default function CheckInCard({
         <div className="flex items-baseline justify-between gap-2">
           <span className="font-semibold text-gray-900 truncate">
             {checkIn.profiles.display_name}
-            {(checkIn.check_in_participants ?? []).length > 0 && (
+            {participantCount > 0 && (
               <span className="font-normal text-gray-400 text-sm">
-                {' '}+{(checkIn.check_in_participants ?? []).length}
+                {' '}+{participantCount}
               </span>
             )}
           </span>

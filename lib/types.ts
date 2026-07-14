@@ -21,7 +21,7 @@ export type Vibe = 'studying' | 'chilling' | 'eating' | 'working' | 'gaming' | '
 
 export interface CheckInParticipant {
   user_id: string;
-  profiles: Profile;
+  profiles?: Profile;
 }
 
 export interface CheckIn {

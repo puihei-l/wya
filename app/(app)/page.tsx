@@ -95,7 +95,7 @@ export default function HomePage() {
           `id, user_id, floor, vibe, is_open, note, starts_at, expires_at, created_at, custom_location, planned_lat, planned_lng,
            profiles:user_id (id, username, display_name, avatar_url),
            buildings:building_id (id, name, address),
-           check_in_participants (user_id, profiles:user_id (id, username, display_name, avatar_url))`
+           check_in_participants (user_id)`
         )
         .gt('expires_at', now);
       if (!cancelled) buildFeed((checkIns as unknown as CheckIn[]) ?? []);
