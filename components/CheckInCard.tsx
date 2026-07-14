@@ -4,7 +4,7 @@ import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { createClient } from '@/lib/supabase/client';
 import { isGenericBuildingName } from '@/lib/gps';
-import type { CheckIn, Vibe, Group } from '@/lib/types';
+import type { CheckIn, Vibe, Group, Profile } from '@/lib/types';
 
 const MapView = dynamic(() => import('@/components/MapView'), { ssr: false });
 
@@ -71,11 +71,28 @@ function nowDatetimeLocal() {
   return toDatetimeLocal(new Date().toISOString());
 }
 
-function Avatar({ name }: { name: string }) {
-  const initials = name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+function initials(name: string) {
+  return name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+}
+
+function AvatarGroup({ people }: { people: Pick<Profile, 'display_name'>[] }) {
+  const shown = people.slice(0, 3);
+  const overflow = people.length - 3;
   return (
-    <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm flex-shrink-0">
-      {initials}
+    <div className="flex flex-shrink-0 self-start">
+      {shown.map((p, i) => (
+        <div
+          key={i}
+          className={`w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm border-2 border-white ${i > 0 ? '-ml-3' : ''}`}
+        >
+          {initials(p.display_name)}
+        </div>
+      ))}
+      {overflow > 0 && (
+        <div className="-ml-3 w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 font-bold text-xs border-2 border-white">
+          +{overflow}
+        </div>
+      )}
     </div>
   );
 }
@@ -104,6 +121,35 @@ export default function CheckInCard({
   );
   const [saving, setSaving] = useState(false);
   const [arrivalConfirmed, setArrivalConfirmed] = useState(false);
+  const [joining, setJoining] = useState(false);
+
+  const isParticipant = (checkIn.check_in_participants ?? []).some(
+    (p) => p.user_id === currentUserId,
+  );
+  const allPeople = [
+    checkIn.profiles,
+    ...(checkIn.check_in_participants ?? []).map((p) => p.profiles),
+  ];
+
+  async function joinCheckIn() {
+    setJoining(true);
+    const supabase = createClient();
+    await supabase
+      .from('check_in_participants')
+      .insert({ check_in_id: checkIn.id, user_id: currentUserId });
+    setJoining(false);
+    onUpdate?.();
+  }
+
+  async function leaveCheckIn() {
+    const supabase = createClient();
+    await supabase
+      .from('check_in_participants')
+      .delete()
+      .eq('check_in_id', checkIn.id)
+      .eq('user_id', currentUserId);
+    onUpdate?.();
+  }
   const [editGroups, setEditGroups] = useState<Group[]>([]);
   const [editSelectedGroups, setEditSelectedGroups] = useState<string[]>([]);
   const [editShareAll, setEditShareAll] = useState(false);
@@ -202,10 +248,17 @@ export default function CheckInCard({
   const cardBody = (
     <>
     <div className="flex gap-3">
-      <Avatar name={checkIn.profiles.display_name} />
+      <AvatarGroup people={allPeople} />
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="font-semibold text-gray-900 truncate">{checkIn.profiles.display_name}</span>
+          <span className="font-semibold text-gray-900 truncate">
+            {checkIn.profiles.display_name}
+            {(checkIn.check_in_participants ?? []).length > 0 && (
+              <span className="font-normal text-gray-400 text-sm">
+                {' '}+{(checkIn.check_in_participants ?? []).length}
+              </span>
+            )}
+          </span>
           <span className="text-xs text-gray-400 flex-shrink-0">
             {isUpcoming && until
               ? until
@@ -277,9 +330,27 @@ export default function CheckInCard({
   );
 
   if (!isOwner) {
+    const canJoin = checkIn.is_open && currentUserId && !isParticipant;
     return (
-      <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
         {cardBody}
+        {canJoin && (
+          <button
+            onClick={joinCheckIn}
+            disabled={joining}
+            className="w-full py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
+          >
+            {joining ? '…' : isUpcoming ? "I'm going" : "I'm here"}
+          </button>
+        )}
+        {isParticipant && (
+          <button
+            onClick={leaveCheckIn}
+            className="w-full py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-semibold"
+          >
+            Leave
+          </button>
+        )}
       </div>
     );
   }

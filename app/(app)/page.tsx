@@ -19,6 +19,9 @@ export default function HomePage() {
   const gpsCoords = useGPSCoords();
   const [nearbyBuilding, setNearbyBuilding] = useState<Building | null>(null);
   const [suggestionDismissed, setSuggestionDismissed] = useState(false);
+  const [joinPrompt, setJoinPrompt] = useState<CheckIn | null>(null);
+  const [joinPromptDismissed, setJoinPromptDismissed] = useState(false);
+  const [joining, setJoining] = useState(false);
 
   useEffect(() => {
     if (!gpsCoords) return;
@@ -38,6 +41,33 @@ export default function HomePage() {
         setSuggestionDismissed(false);
       });
   }, [gpsCoords]);
+
+  // When GPS resolves, find nearby active check-ins the user hasn't joined yet.
+  useEffect(() => {
+    if (!gpsCoords || !currentUserId) return;
+    const candidate = active.find(
+      (c) =>
+        c.user_id !== currentUserId &&
+        !(c.check_in_participants ?? []).some((p) => p.user_id === currentUserId) &&
+        c.planned_lat != null &&
+        c.planned_lng != null &&
+        haversineKm(gpsCoords.lat, gpsCoords.lng, c.planned_lat!, c.planned_lng!) <= 0.1,
+    );
+    if (candidate) { setJoinPrompt(candidate); setJoinPromptDismissed(false); }
+    else setJoinPrompt(null);
+  }, [gpsCoords, active, currentUserId]);
+
+  async function joinFromPrompt() {
+    if (!joinPrompt || !currentUserId) return;
+    setJoining(true);
+    const supabase = createClient();
+    await supabase
+      .from('check_in_participants')
+      .insert({ check_in_id: joinPrompt.id, user_id: currentUserId });
+    setJoining(false);
+    setJoinPromptDismissed(true);
+    fetchAllRef.current();
+  }
 
   const buildFeed = useCallback((checkIns: CheckIn[]) => {
     const now = new Date();
@@ -64,7 +94,8 @@ export default function HomePage() {
         .select(
           `id, user_id, floor, vibe, is_open, note, starts_at, expires_at, created_at, custom_location, planned_lat, planned_lng,
            profiles:user_id (id, username, display_name, avatar_url),
-           buildings:building_id (id, name, address)`
+           buildings:building_id (id, name, address),
+           check_in_participants (user_id, profiles:user_id (id, username, display_name, avatar_url))`
         )
         .gt('expires_at', now);
       if (!cancelled) buildFeed((checkIns as unknown as CheckIn[]) ?? []);
@@ -92,6 +123,11 @@ export default function HomePage() {
           filter: `user_id=eq.${user.id}`,
         }, fetchAll)
         .subscribe();
+
+      supabase
+        .channel('check-in-participants')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'check_in_participants' }, fetchAll)
+        .subscribe();
     }
 
     init();
@@ -106,6 +142,33 @@ export default function HomePage() {
   return (
     <div className="max-w-lg mx-auto px-4 pt-6">
       <PushSetup />
+
+      {joinPrompt && !joinPromptDismissed && (
+        <div className="flex items-center gap-3 bg-green-50 border border-green-100 rounded-2xl px-4 py-3 mb-3">
+          <span className="text-xl">📍</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-green-900 truncate">
+              {joinPrompt.profiles.display_name} is here
+            </p>
+            <p className="text-xs text-green-600 truncate">
+              {joinPrompt.buildings?.name ?? joinPrompt.custom_location ?? 'Nearby'} — want to join?
+            </p>
+          </div>
+          <button
+            onClick={joinFromPrompt}
+            disabled={joining}
+            className="text-xs font-semibold bg-green-600 text-white px-3 py-1.5 rounded-lg flex-shrink-0 disabled:opacity-50"
+          >
+            {joining ? '…' : "I'm here"}
+          </button>
+          <button
+            onClick={() => setJoinPromptDismissed(true)}
+            className="text-green-300 hover:text-green-500 text-lg leading-none flex-shrink-0"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {nearbyBuilding && !suggestionDismissed && !active.some((c) => c.user_id === currentUserId) && (
         <div className="flex items-center gap-3 bg-indigo-50 border border-indigo-100 rounded-2xl px-4 py-3 mb-4">

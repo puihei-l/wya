@@ -19,6 +19,11 @@ export interface Building {
 
 export type Vibe = 'studying' | 'chilling' | 'eating' | 'working' | 'gaming' | 'exercising';
 
+export interface CheckInParticipant {
+  user_id: string;
+  profiles: Profile;
+}
+
 export interface CheckIn {
   id: string;
   user_id: string;
@@ -32,6 +37,7 @@ export interface CheckIn {
   custom_location: string | null;
   planned_lat: number | null;
   planned_lng: number | null;
+  check_in_participants: CheckInParticipant[];
   profiles: Profile;
   buildings: Building | null;
 }

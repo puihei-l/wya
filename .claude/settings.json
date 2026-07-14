@@ -6,10 +6,14 @@
       "Bash(git push *)",
       "Bash(npx tsc *)",
       "Bash(node -e \"console.log\\(require\\('./node_modules/next/package.json'\\).version\\)\")",
-      "Bash(rm /Users/puiheilam/Documents/wya/app/page.tsx)"
+      "Bash(rm /Users/puiheilam/Documents/wya/app/page.tsx)",
+      "Bash(rm /Users/puiheilam/Documents/wya/supabase/add_photo_url.sql /Users/puiheilam/Documents/wya/app/api/cleanup/route.ts /Users/puiheilam/Documents/wya/vercel.json)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ],
     "additionalDirectories": [
-      "/Users/puiheilam/Documents/wya/app"
+      "/Users/puiheilam/Documents/wya/app",
+      "/Users/puiheilam/Documents/wya/supabase"
     ]
   }
 }
